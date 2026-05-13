@@ -4,9 +4,13 @@ import 'providers/savings_provider.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notifications
+  await NotificationService().init();
 
   // Pre-load persisted data before painting the first frame
   final provider = SavingsProvider();

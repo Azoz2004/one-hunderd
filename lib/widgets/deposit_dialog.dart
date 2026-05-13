@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../gamification/gamification_dialogs.dart';
 import '../providers/savings_provider.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 
 /// A modal bottom sheet form for logging a daily deposit.
@@ -64,6 +65,11 @@ class _DepositDialogState extends State<DepositDialog> {
     if (!mounted) return;
     final nav = Navigator.of(context);
     nav.pop();
+
+    // Notification Logic
+    final notificationService = NotificationService();
+    await notificationService.cancelEveningNotification();
+    await notificationService.schedulePassiveAggressiveReminder();
 
     // Trigger gamification after the sheet closes
     WidgetsBinding.instance.addPostFrameCallback((_) async {

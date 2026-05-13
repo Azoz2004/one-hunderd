@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/deposit_dialog.dart';
 import '../widgets/savings_grid.dart';
 import '../widgets/streak_card.dart';
+import '../services/notification_service.dart';
 import 'auth_screen.dart';
 
 /// Home screen designed to mirror the physical sticker layout:
@@ -19,14 +20,33 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasPendingQuest = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Run after first frame so context is ready for dialogs
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runGamification());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runGamification();
+      final provider = context.read<SavingsProvider>();
+      NotificationService().scheduleDailyNotifications(provider.completedDays);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      final provider = context.read<SavingsProvider>();
+      NotificationService().scheduleDailyNotifications(provider.completedDays);
+    }
   }
 
   Future<void> _runGamification() async {
@@ -48,6 +68,73 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refreshPendingQuestBadge() async {
     final pending = await hasPendingQuest();
     if (mounted) setState(() => _hasPendingQuest = pending);
+  }
+
+  void _showTestNotificationsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Test Notifications (3s delay)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.wb_sunny),
+                title: const Text('Morning Habit'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  NotificationService().testNotification(
+                      'صباح الإنجاز! ☀️', 'صباح الخير! وفرت ثمن قهوة اليوم؟ حطها بالحصالة وخلي بداية يومك إنجاز ☕');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.warning_amber_rounded),
+                title: const Text('Evening Escalation'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  NotificationService().testNotification(
+                      'تنبيه! ⚠️', 'الستريك تبعك في خطر! 🔥 لا تضيع تعب الأيام الماضية، سجل إيداعك الآن.');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.weekend),
+                title: const Text('Weekend Context'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  NotificationService().testNotification(
+                      'صباح الإنجاز! ☀️', 'الويكند بلّش والمصاريف رح تزيد! ادفع لحصالتك أولاً قبل ما تطير الفلوس.');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.rocket_launch),
+                title: const Text('Milestone Teaser'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  NotificationService().testNotification(
+                      'قربت توصل! 🚀', 'باقي يومين بس وتوصل لمحطة جديدة وتكسب مكافأتك! لا توقف هسا.');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sentiment_dissatisfied),
+                title: const Text('Passive-Aggressive'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  NotificationService().testNotification(
+                      'وينك؟ 🧐', 'يبدو أن تحقيق هدفك لم يعد من أولوياتك حالياً 😔. سنتوقف عن إرسال التذكيرات لك لبعض الوقت.');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showDebugMenu(BuildContext context) {
@@ -176,6 +263,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           final provider = context.read<SavingsProvider>();
                           await provider.debugResetData();
                           _refreshPendingQuestBadge();
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.notifications_active),
+                        title: const Text('Test Notifications Menu'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showTestNotificationsMenu(context);
                         },
                       ),
                     ],
