@@ -19,6 +19,16 @@ class SavingsProvider extends ChangeNotifier {
   UserProfile? _userProfile;
   final List<Deposit> _deposits = [];
 
+  int _currentStreak = 0;
+  int _lifebuoys = 0;
+  DateTime? _lastDepositDate;
+
+  int _woodenCoins = 0;
+  String? _lastDailyClaimDate;
+  int _adsWatchedToday = 0;
+  int _sharesDoneToday = 0;
+  String? _currentDateStr;
+
   // ── Getters ──────────────────────────────────────────────────────────────
 
   UserProfile? get userProfile => _userProfile;
@@ -66,24 +76,37 @@ class SavingsProvider extends ChangeNotifier {
   }
 
   /// Current streak: consecutive calendar days ending at today (or yesterday).
-  int get currentStreak {
-    if (_deposits.isEmpty) return 0;
+  int get currentStreak => _currentStreak;
+  
+  int get lifebuoys => _lifebuoys;
+  DateTime? get lastDepositDate => _lastDepositDate;
 
+  int get woodenCoins => _woodenCoins;
+  String? get lastDailyClaimDate => _lastDailyClaimDate;
+  int get adsWatchedToday => _adsWatchedToday;
+  int get sharesDoneToday => _sharesDoneToday;
+
+  /// Whether the streak is broken (missed more than 1 day)
+  bool get isStreakBroken {
+    if (_lastDepositDate == null || _currentStreak == 0) return false;
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
+    return todayOnly.difference(_lastDepositDate!).inDays > 1;
+  }
 
+  int _calculateOldStreak() {
+    if (_deposits.isEmpty) return 0;
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
     final dateSet = <DateTime>{};
     for (final d in _deposits) {
       dateSet.add(d.dateOnly);
     }
-
-    // Start from today; if no deposit today, try yesterday
     DateTime checkDate = todayOnly;
     if (!dateSet.contains(checkDate)) {
       checkDate = checkDate.subtract(const Duration(days: 1));
       if (!dateSet.contains(checkDate)) return 0;
     }
-
     int streak = 0;
     while (dateSet.contains(checkDate)) {
       streak++;
@@ -129,6 +152,23 @@ class SavingsProvider extends ChangeNotifier {
       }
     }
 
+    // Load streak and lifebuoys
+    _currentStreak = prefs.getInt('current_streak_v1') ?? 0;
+    _lifebuoys = prefs.getInt('lifebuoys_v1') ?? 0;
+    final lastDateStr = prefs.getString('last_deposit_date_v1');
+    if (lastDateStr != null) {
+      _lastDepositDate = DateTime.tryParse(lastDateStr);
+    }
+
+    // Load coins and daily counters
+    _woodenCoins = prefs.getInt('wooden_coins_v1') ?? 0;
+    _lastDailyClaimDate = prefs.getString('last_daily_claim_v1');
+    _adsWatchedToday = prefs.getInt('ads_watched_v1') ?? 0;
+    _sharesDoneToday = prefs.getInt('shares_done_v1') ?? 0;
+    _currentDateStr = prefs.getString('current_date_str_v1');
+    
+    checkAndResetDailyCounters();
+
     // Load deposits
     final depositsJson = prefs.getStringList(_kDeposits) ?? [];
     _deposits.clear();
@@ -139,6 +179,13 @@ class SavingsProvider extends ChangeNotifier {
       } catch (_) {
         // Skip corrupted entry
       }
+    }
+
+    // Migrate old streak logic if needed
+    if (prefs.getInt('current_streak_v1') == null && _deposits.isNotEmpty) {
+      _currentStreak = _calculateOldStreak();
+      _lastDepositDate = uniqueDepositDates.last;
+      await _persist();
     }
 
     notifyListeners();
@@ -160,6 +207,28 @@ class SavingsProvider extends ChangeNotifier {
       _kDeposits,
       _deposits.map((d) => jsonEncode(d.toJson())).toList(),
     );
+
+    await prefs.setInt('current_streak_v1', _currentStreak);
+    await prefs.setInt('lifebuoys_v1', _lifebuoys);
+    if (_lastDepositDate != null) {
+      await prefs.setString('last_deposit_date_v1', _lastDepositDate!.toIso8601String());
+    } else {
+      await prefs.remove('last_deposit_date_v1');
+    }
+
+    await prefs.setInt('wooden_coins_v1', _woodenCoins);
+    if (_lastDailyClaimDate != null) {
+      await prefs.setString('last_daily_claim_v1', _lastDailyClaimDate!);
+    } else {
+      await prefs.remove('last_daily_claim_v1');
+    }
+    await prefs.setInt('ads_watched_v1', _adsWatchedToday);
+    await prefs.setInt('shares_done_v1', _sharesDoneToday);
+    if (_currentDateStr != null) {
+      await prefs.setString('current_date_str_v1', _currentDateStr!);
+    } else {
+      await prefs.remove('current_date_str_v1');
+    }
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -205,22 +274,142 @@ class SavingsProvider extends ChangeNotifier {
     required double amount,
     String? notes,
   }) async {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+
+    if (_lastDepositDate == null) {
+      _currentStreak = 1;
+    } else {
+      final diff = todayOnly.difference(_lastDepositDate!).inDays;
+      if (diff == 1) {
+        _currentStreak += 1;
+      } else if (diff > 1) {
+        // Missed days, streak resets to 1 (lifebuoy wasn't used)
+        _currentStreak = 1;
+      }
+      // If diff == 0, it's the same day, streak doesn't increase.
+    }
+    _lastDepositDate = todayOnly;
+
     _deposits.add(Deposit(
       amount: amount,
-      date: DateTime.now(),
+      date: today,
       notes: notes,
     ));
     notifyListeners();
     await _persist();
   }
 
+  Future<void> useLifebuoy() async {
+    if (_lifebuoys <= 0) return;
+    _lifebuoys -= 1;
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    
+    // Fake the last deposit to be yesterday to resume the streak
+    _lastDepositDate = todayOnly.subtract(const Duration(days: 1));
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> resetStreak() async {
+    _currentStreak = 0;
+    notifyListeners();
+    await _persist();
+  }
+
+  // ── Coins & Rewards Logic ───────────────────────────────────────────────────
+
+  void checkAndResetDailyCounters() {
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    
+    if (_currentDateStr != todayStr) {
+      _currentDateStr = todayStr;
+      _adsWatchedToday = 0;
+      _sharesDoneToday = 0;
+      _persist();
+    }
+  }
+
+  Future<void> addCoins(int amount) async {
+    _woodenCoins += amount;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<bool> deductCoins(int amount) async {
+    if (_woodenCoins >= amount) {
+      _woodenCoins -= amount;
+      notifyListeners();
+      await _persist();
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> claimDailyReward() async {
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    if (_lastDailyClaimDate == todayStr) return;
+
+    _woodenCoins += 10;
+    _lastDailyClaimDate = todayStr;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> watchAdReward() async {
+    checkAndResetDailyCounters();
+    if (_adsWatchedToday >= 4) return;
+    
+    _woodenCoins += 25;
+    _adsWatchedToday += 1;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<bool> registerShareReward() async {
+    checkAndResetDailyCounters();
+    if (_sharesDoneToday >= 5) return false;
+    
+    _woodenCoins += 20;
+    _sharesDoneToday += 1;
+    notifyListeners();
+    await _persist();
+    return true;
+  }
+
+  Future<void> buyLifebuoy() async {
+    if (await deductCoins(1000)) {
+      _lifebuoys += 1;
+      notifyListeners();
+      await _persist();
+    } else {
+      throw Exception('ليس لديك عملات كافية!');
+    }
+  }
+
   Future<void> signOut() async {
     _userProfile = null;
     _deposits.clear();
+    _currentStreak = 0;
+    _lifebuoys = 0;
+    _lastDepositDate = null;
+    _woodenCoins = 0;
+    _lastDailyClaimDate = null;
+    _adsWatchedToday = 0;
+    _sharesDoneToday = 0;
+    _currentDateStr = null;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kUserProfile);
     await prefs.remove(_kDeposits);
+    await prefs.remove('wooden_coins_v1');
+    await prefs.remove('last_daily_claim_v1');
+    await prefs.remove('ads_watched_v1');
+    await prefs.remove('shares_done_v1');
+    await prefs.remove('current_date_str_v1');
   }
 
   // ── Debug Helpers ────────────────────────────────────────────────────────
@@ -241,6 +430,9 @@ class SavingsProvider extends ChangeNotifier {
 
   Future<void> debugResetData() async {
     _deposits.clear();
+    _currentStreak = 0;
+    _lifebuoys = 0;
+    _lastDepositDate = null;
     notifyListeners();
     await _persist();
     final prefs = await SharedPreferences.getInstance();
@@ -249,5 +441,25 @@ class SavingsProvider extends ChangeNotifier {
     await prefs.remove('quest_accepted_day');
     await prefs.remove('quest_done_day');
     await prefs.remove('last_milestone_shown');
+  }
+
+  Future<void> debugAddLifebuoy() async {
+    _lifebuoys++;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> debugAdd500Coins() async {
+    _woodenCoins += 500;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> debugResetDailyLimits() async {
+    _adsWatchedToday = 0;
+    _sharesDoneToday = 0;
+    _lastDailyClaimDate = null;
+    notifyListeners();
+    await _persist();
   }
 }

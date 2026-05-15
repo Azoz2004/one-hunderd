@@ -58,12 +58,19 @@ class DayCell extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
+      builder: (ctx) => SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            top: 16,
+            right: 24,
+            bottom: 32 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -164,6 +171,7 @@ class DayCell extends StatelessWidget {
                 )),
           ],
         ),
+      ),
       ),
     );
   }

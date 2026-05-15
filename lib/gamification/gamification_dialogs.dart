@@ -1,8 +1,14 @@
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../theme/app_theme.dart';
+import '../providers/savings_provider.dart';
 
 // ─── SharedPrefs Keys ────────────────────────────────────────────────────────
 const _kLastInsightDate = 'last_insight_date';
@@ -176,11 +182,12 @@ Future<void> _showInsightDialog(BuildContext context) async {
     builder: (ctx) => Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: AppColors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             // Icon
             Container(
               width: 72,
@@ -273,6 +280,7 @@ Future<void> _showInsightDialog(BuildContext context) async {
           ],
         ),
       ),
+      ),
     ),
   );
 }
@@ -302,11 +310,12 @@ Future<void> _showQuestDialog(
             borderRadius: BorderRadius.circular(20),
           ),
           backgroundColor: AppColors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 // Icon badge
                 Container(
                   width: 72,
@@ -484,6 +493,7 @@ Future<void> _showQuestDialog(
               ],
             ),
           ),
+          ),
         );
       },
     ),
@@ -525,6 +535,8 @@ class _MilestoneDialogContent extends StatefulWidget {
 
 class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
   late final ConfettiController _confettiController;
+  final ScreenshotController _screenshotController = ScreenshotController();
+  bool _isSharing = false;
 
   static const Map<int, Color> _milestoneColors = {
     25: Color(0xFFFF9F43),
@@ -588,11 +600,12 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
             borderRadius: BorderRadius.circular(20),
           ),
           backgroundColor: AppColors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 // Icon
                 Container(
                   width: 80,
@@ -668,26 +681,15 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
                 const Divider(color: AppColors.borderLight, height: 1),
                 const SizedBox(height: 20),
 
-                // Share button (placeholder)
+                // Share button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      // TODO: integrate share_plus for real sharing
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('قريباً — مشاركة الإنجاز! 🚀'),
-                          backgroundColor: AppColors.charcoal,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          margin: const EdgeInsets.all(16),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.share_rounded, size: 18),
-                    label: const Text('مشاركة الإنجاز'),
+                    onPressed: _isSharing ? null : () => _shareAchievement(context, color),
+                    icon: _isSharing 
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                        : const Icon(Icons.share_rounded, size: 18),
+                    label: Text(_isSharing ? 'جاري التحضير...' : 'مشاركة الإنجاز'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: color,
                       foregroundColor: Colors.white,
@@ -709,13 +711,159 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _shareAchievement(BuildContext context, Color color) async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+
+    try {
+      final provider = context.read<SavingsProvider>();
+      final totalSaved = provider.totalSaved;
+      final date = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+
+      // Capture widget off-screen
+      final imageBytes = await _screenshotController.captureFromWidget(
+        Directionality(
+          textDirection: TextDirection.rtl,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 400,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: color.withValues(alpha: 0.3), width: 4),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset('assets/images/logo.png', width: 90, height: 90, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'اليوم ${widget.day} من 100',
+                      style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.charcoal,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.body,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 18,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardFill,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderLight),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'المبلغ المُدّخر حتى الآن',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${totalSaved.toStringAsFixed(1)} JOD',
+                          style: const TextStyle(color: AppColors.green, fontSize: 32, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        date,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      const Text(
+                        '#تحدي_المئة_يوم',
+                        style: TextStyle(color: Color(0xFF667EEA), fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        delay: const Duration(milliseconds: 100),
+      );
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/achievement_${widget.day}.png');
+      await file.writeAsBytes(imageBytes);
+
+      final xfile = XFile(file.path);
+      final ShareResult result = await Share.shareXFiles(
+        [xfile],
+        text: 'لقد حققت إنجازاً جديداً في تحدي المئة يوم! 🎉\nوصلت إلى اليوم ${widget.day} وادخرت ${totalSaved.toStringAsFixed(1)} JOD.\nهل أنت جاهز للتحدي؟ #تحدي_المئة_يوم',
+      );
+
+      if (!mounted) return;
+      
+      if (result.status == ShareResultStatus.success) {
+        final success = await provider.registerShareReward();
+        if (!mounted) return;
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('تمت المشاركة بنجاح! حصلت على 20 قطعة خشبية 🪙'),
+              backgroundColor: AppColors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ أثناء المشاركة: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
   }
 }
 
@@ -723,4 +871,303 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
 String _todayKey() {
   final now = DateTime.now();
   return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+}
+
+// ─── Lifebuoy System ──────────────────────────────────────────────────────────
+
+Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = false}) async {
+  final provider = context.read<SavingsProvider>();
+  
+  if (manualTrigger && !provider.isStreakBroken) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('الستريك الخاص بك بأمان حالياً! 🔥 لا تحتاج لاستخدام طوق نجاة.'),
+        backgroundColor: AppColors.charcoal,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+    if (provider.lifebuoys > 0) return;
+  }
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      final hasLifebuoy = provider.lifebuoys > 0;
+      
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: AppColors.white,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.support, size: 64, color: Colors.deepOrangeAccent),
+                const SizedBox(height: 16),
+                Text(
+                  hasLifebuoy ? 'إنقاذ الستريك!' : 'نفذت أطواق النجاة',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.charcoal,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  hasLifebuoy
+                      ? 'هل تريد استخدام طوق نجاة لإنقاذ الستريك؟'
+                      : 'ليس لديك أطواق نجاة. هل تريد شراء طوق مقابل 1000 قطعة خشبية؟',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (hasLifebuoy)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            Navigator.of(ctx).pop();
+                            if (!manualTrigger) {
+                              await provider.resetStreak();
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            side: const BorderSide(color: AppColors.borderLight),
+                          ),
+                          child: const Text(
+                            'لا، شكراً',
+                            style: TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(ctx).pop();
+                            await provider.useLifebuoy();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('تم إنقاذ الستريك بنجاح! 🛟')),
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepOrangeAccent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('استخدام الطوق', style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            Navigator.of(ctx).pop();
+                            if (!manualTrigger) {
+                              await provider.resetStreak();
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            side: const BorderSide(color: AppColors.borderLight),
+                          ),
+                          child: const Text(
+                            'إلغاء',
+                            style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(ctx).pop();
+                            try {
+                              await provider.buyLifebuoy();
+                              if (!manualTrigger) {
+                                await provider.useLifebuoy();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('تم شراء طوق نجاة واستخدامه لإنقاذ الستريك! 🛟🔥')),
+                                  );
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('تم شراء طوق نجاة بنجاح! 🛟')),
+                                  );
+                                }
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+                                );
+                              }
+                              if (!manualTrigger) {
+                                await provider.resetStreak();
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.charcoal,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('شراء الطوق', style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+// ─── Wallet System ────────────────────────────────────────────────────────────
+
+Future<void> showWalletDialog(BuildContext context) async {
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final provider = context.watch<SavingsProvider>();
+          final today = DateTime.now();
+          final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+          final canClaimDaily = provider.lastDailyClaimDate != todayStr;
+          final adsWatched = provider.adsWatchedToday;
+          final canWatchAd = adsWatched < 4;
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: AppColors.white,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.account_balance_wallet_rounded, size: 64, color: AppColors.charcoal),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'المحفظة',
+                    style: TextStyle(color: AppColors.charcoal, fontSize: 24, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'رصيدك الحالي: ${provider.woodenCoins} قطعة خشبية',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Daily Claim
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: canClaimDaily
+                          ? () async {
+                              await provider.claimDailyReward();
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(content: Text('حصلت على 10 قطع خشبية! 🪙')),
+                                );
+                              }
+                            }
+                          : null,
+                      icon: const Icon(Icons.card_giftcard_rounded, size: 20),
+                      label: Text(canClaimDaily ? 'المكافأة اليومية (+10)' : 'تم الاستلام اليوم', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.green,
+                        foregroundColor: AppColors.white,
+                        disabledBackgroundColor: AppColors.borderLight,
+                        disabledForegroundColor: AppColors.textSecondary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Watch Ad
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: canWatchAd
+                          ? () async {
+                              // Simulate ad viewing
+                              showDialog(
+                                context: ctx,
+                                barrierDismissible: false,
+                                builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.charcoal)),
+                              );
+                              await Future.delayed(const Duration(seconds: 2));
+                              if (ctx.mounted) Navigator.pop(ctx); // Close loading
+                              
+                              await provider.watchAdReward();
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(content: Text('حصلت على 25 قطعة خشبية! 🪙')),
+                                );
+                              }
+                            }
+                          : null,
+                      icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
+                      label: Text('شاهد إعلان (+25)   $adsWatched/4', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.charcoal,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: AppColors.border, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('إغلاق', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }

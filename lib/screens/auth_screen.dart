@@ -52,6 +52,7 @@ class _AuthScreenState extends State<AuthScreen>
 
   // ── Navigation ───────────────────────────────────────────────────────────
   void _nextStep() {
+    FocusScope.of(context).unfocus();
     if (_currentStep == 0) {
       if (!_formKey.currentState!.validate()) return;
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/savings_provider.dart';
 import '../theme/app_theme.dart';
+import '../gamification/gamification_dialogs.dart';
 
 /// A minimal streak display matching the sticker aesthetic.
 class StreakCard extends StatelessWidget {
@@ -61,23 +62,56 @@ class StreakCard extends StatelessWidget {
               ],
             ),
           ),
-          // Today indicator
-          if (provider.hasTodayDeposit)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.greenLight,
-                borderRadius: BorderRadius.circular(20),
+          // Lifebuoy & Today indicator
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (provider.hasTodayDeposit)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.greenLight,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '✓ Today',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.green,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                  ),
+                ),
+              GestureDetector(
+                onTap: () => showLifebuoyDialog(context, manualTrigger: true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardFill,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.support, size: 16, color: Colors.deepOrangeAccent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'x${provider.lifebuoys}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.charcoal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Text(
-                '✓ Today',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.green,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );

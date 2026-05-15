@@ -93,93 +93,95 @@ class _DepositDialogState extends State<DepositDialog> {
         24, 16, 24,
         MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Title
-            Text(
-              'Log Deposit',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 4),
-            if (todayDeposits.isNotEmpty)
+              const SizedBox(height: 20),
+        
+              // Title
               Text(
-                '${todayDeposits.length} deposit${todayDeposits.length > 1 ? 's' : ''} today — ${provider.todayTotal.toStringAsFixed(1)} JOD',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.green,
-                      fontWeight: FontWeight.w500,
-                    ),
-              )
-            else
-              Text(
-                'Day ${provider.completedDays + 1} of 100',
-                style: Theme.of(context).textTheme.bodySmall,
+                'Log Deposit',
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
-            const SizedBox(height: 24),
-
-            // Amount field
-            TextFormField(
-              controller: _amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Amount (JOD)',
-                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              const SizedBox(height: 4),
+              if (todayDeposits.isNotEmpty)
+                Text(
+                  '${todayDeposits.length} deposit${todayDeposits.length > 1 ? 's' : ''} today — ${provider.todayTotal.toStringAsFixed(1)} JOD',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                )
+              else
+                Text(
+                  'Day ${provider.completedDays + 1} of 100',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              const SizedBox(height: 24),
+        
+              // Amount field
+              TextFormField(
+                controller: _amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Amount (JOD)',
+                  prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter an amount';
+                  }
+                  final n = double.tryParse(value.trim());
+                  if (n == null || n <= 0) {
+                    return 'Enter a valid positive amount';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter an amount';
-                }
-                final n = double.tryParse(value.trim());
-                if (n == null || n <= 0) {
-                  return 'Enter a valid positive amount';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Notes field
-            TextFormField(
-              controller: _notesController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                prefixIcon: Icon(Icons.note_outlined),
-                alignLabelWithHint: true,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Save button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: provider.isComplete ? null : _save,
-                icon: const Icon(Icons.check_rounded, size: 20),
-                label: Text(
-                  provider.isComplete ? 'Challenge Complete!' : 'Save Deposit',
+              const SizedBox(height: 16),
+        
+              // Notes field
+              TextFormField(
+                controller: _notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (optional)',
+                  prefixIcon: Icon(Icons.note_outlined),
+                  alignLabelWithHint: true,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+        
+              // Save button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: provider.isComplete ? null : _save,
+                  icon: const Icon(Icons.check_rounded, size: 20),
+                  label: Text(
+                    provider.isComplete ? 'Challenge Complete!' : 'Save Deposit',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

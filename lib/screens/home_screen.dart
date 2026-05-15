@@ -52,6 +52,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _runGamification() async {
     if (!mounted) return;
     final provider = context.read<SavingsProvider>();
+
+    // 1. Check Streak Protection first
+    if (provider.isStreakBroken) {
+      await showLifebuoyDialog(context);
+    }
+    if (!mounted) return;
+
     final days = provider.completedDays;
 
     // Show milestone first (highest priority), then quest, then insight
@@ -255,6 +262,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         },
                       ),
                       ListTile(
+                        leading: const Icon(Icons.monetization_on, color: Colors.orange),
+                        title: const Text('Add 500 Coins'),
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          final provider = context.read<SavingsProvider>();
+                          await provider.debugAdd500Coins();
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.refresh, color: Colors.green),
+                        title: const Text('Reset Daily Limits'),
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          final provider = context.read<SavingsProvider>();
+                          await provider.debugResetDailyLimits();
+                        },
+                      ),
+                      ListTile(
                         leading: const Icon(Icons.delete_forever, color: Colors.red),
                         title: const Text('Reset All Data',
                             style: TextStyle(color: Colors.red)),
@@ -427,6 +452,35 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
+
+        // ── Coin Counter (clickable) ──
+        GestureDetector(
+          onTap: () => showWalletDialog(context),
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.cardFill,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.generating_tokens_rounded, color: Colors.orangeAccent, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  '${provider.woodenCoins}',
+                  style: const TextStyle(
+                    color: AppColors.charcoal,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
 
         IconButton(
           onPressed: () {
