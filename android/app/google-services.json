@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "338866161144",
+    "project_id": "one-hundred-app",
+    "storage_bucket": "one-hundred-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:338866161144:android:04c678f8bb321c5ad4820d",
+        "android_client_info": {
+          "package_name": "com.example.one_hunderd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBi1J2f1hGyAEIuPK-FZyFXzpOzaRC0HqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -300,6 +300,35 @@ class SavingsProvider extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> updateDeposit(String id, {required double amount, String? notes}) async {
+    final index = _deposits.indexWhere((d) => d.id == id);
+    if (index == -1) return;
+    
+    final oldDeposit = _deposits[index];
+    _deposits[index] = Deposit(
+      id: oldDeposit.id,
+      amount: amount,
+      date: oldDeposit.date,
+      notes: notes,
+    );
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> deleteDeposit(String id) async {
+    _deposits.removeWhere((d) => d.id == id);
+    if (_deposits.isEmpty) {
+      _currentStreak = 0;
+      _lastDepositDate = null;
+    } else {
+      _currentStreak = _calculateOldStreak();
+      final dates = uniqueDepositDates;
+      _lastDepositDate = dates.isNotEmpty ? dates.last : null;
+    }
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> useLifebuoy() async {
     if (_lifebuoys <= 0) return;
     _lifebuoys -= 1;

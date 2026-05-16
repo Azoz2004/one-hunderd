@@ -66,8 +66,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     await checkAndShowWeeklyQuest(context, days);
     if (!mounted) return;
-    await checkAndShowDailyInsight(context);
-    if (!mounted) return;
+    // await checkAndShowDailyInsight(context);
+    // if (!mounted) return;
 
     _refreshPendingQuestBadge();
   }

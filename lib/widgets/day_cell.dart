@@ -161,9 +161,31 @@ class DayCell extends StatelessWidget {
                             ],
                           ),
                         ),
-                        Text(
-                          timeFormat.format(dep.date),
-                          style: Theme.of(ctx).textTheme.bodySmall,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              timeFormat.format(dep.date),
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                        PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              Navigator.pop(ctx);
+                              _showEditDepositDialog(context, provider, dep);
+                            } else if (value == 'delete') {
+                              Navigator.pop(ctx);
+                              _showDeleteConfirmation(context, provider, dep);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) => [
+                            const PopupMenuItem(value: 'edit', child: Text('تعديل', style: TextStyle(fontSize: 14))),
+                            const PopupMenuItem(value: 'delete', child: Text('حذف', style: TextStyle(fontSize: 14, color: Colors.red))),
+                          ],
                         ),
                       ],
                     ),
@@ -172,6 +194,83 @@ class DayCell extends StatelessWidget {
           ],
         ),
       ),
+      ),
+    );
+  }
+
+  void _showEditDepositDialog(BuildContext context, SavingsProvider provider, dynamic dep) {
+    final amountController = TextEditingController(text: dep.amount.toString());
+    final notesController = TextEditingController(text: dep.notes ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تعديل الإيداع'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'المبلغ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'ملاحظات (اختياري)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newAmount = double.tryParse(amountController.text);
+              if (newAmount != null && newAmount > 0) {
+                provider.updateDeposit(
+                  dep.id,
+                  amount: newAmount,
+                  notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                );
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, SavingsProvider provider, dynamic dep) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: const Text('هل أنت متأكد من حذف هذا الإيداع؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              provider.deleteDeposit(dep.id);
+              Navigator.pop(ctx);
+            },
+            child: const Text('حذف', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
