@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/deposit.dart';
 import '../models/user_profile.dart';
 
@@ -32,7 +34,7 @@ class SavingsProvider extends ChangeNotifier {
   // ── Getters ──────────────────────────────────────────────────────────────
 
   UserProfile? get userProfile => _userProfile;
-  bool get isLoggedIn => _userProfile != null;
+  bool get isLoggedIn => FirebaseAuth.instance.currentUser != null && _userProfile != null;
   List<Deposit> get deposits => List.unmodifiable(_deposits);
 
   /// All unique calendar dates that have at least one deposit, sorted ascending.
@@ -136,55 +138,89 @@ class SavingsProvider extends ChangeNotifier {
 
   // ── Initialisation ────────────────────────────────────────────────────────
 
-  /// Loads all persisted data from SharedPreferences.
+  Future<void> initializeAuthAndData() async {
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        init();
+      } else {
+        _userProfile = null;
+        notifyListeners();
+      }
+    });
+
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+    if (user != null) {
+      await init();
+    }
+  }
+
+  /// Loads all persisted data from Firestore (Offline persistence handles cache automatically).
   /// Call once from main() before runApp.
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final docSnap = await docRef.get();
+    final data = docSnap.data() ?? <String, dynamic>{};
 
     // Load user profile
-    final profileJson = prefs.getString(_kUserProfile);
-    if (profileJson != null) {
+    if (data.containsKey(_kUserProfile) && data[_kUserProfile] != null) {
       try {
-        _userProfile = UserProfile.fromJson(
-            jsonDecode(profileJson) as Map<String, dynamic>);
+        _userProfile = UserProfile.fromJson(data[_kUserProfile] as Map<String, dynamic>);
       } catch (_) {
         _userProfile = null;
       }
     }
 
+    // Fallback if user profile wasn't saved properly before
+    if (_userProfile == null) {
+      _userProfile = UserProfile(
+        fullName: 'صديق التحدي',
+        gender: 'Male',
+        contact: user.email ?? '',
+        financialGoal: 5050.0,
+        maritalStatus: 'شاب',
+        goal: 'توفير',
+        challengeType: 'فردي',
+      );
+      // Try to save this default profile back to Firestore asynchronously
+      _persist().catchError((_) {});
+    }
+
     // Load streak and lifebuoys
-    _currentStreak = prefs.getInt('current_streak_v1') ?? 0;
-    _lifebuoys = prefs.getInt('lifebuoys_v1') ?? 0;
-    final lastDateStr = prefs.getString('last_deposit_date_v1');
+    _currentStreak = data['current_streak_v1'] as int? ?? 0;
+    _lifebuoys = data['lifebuoys_v1'] as int? ?? 0;
+    final lastDateStr = data['last_deposit_date_v1'] as String?;
     if (lastDateStr != null) {
       _lastDepositDate = DateTime.tryParse(lastDateStr);
     }
 
     // Load coins and daily counters
-    _woodenCoins = prefs.getInt('wooden_coins_v1') ?? 0;
-    _lastDailyClaimDate = prefs.getString('last_daily_claim_v1');
-    _adsWatchedToday = prefs.getInt('ads_watched_v1') ?? 0;
-    _sharesDoneToday = prefs.getInt('shares_done_v1') ?? 0;
-    _currentDateStr = prefs.getString('current_date_str_v1');
+    _woodenCoins = data['wooden_coins_v1'] as int? ?? 0;
+    _lastDailyClaimDate = data['last_daily_claim_v1'] as String?;
+    _adsWatchedToday = data['ads_watched_v1'] as int? ?? 0;
+    _sharesDoneToday = data['shares_done_v1'] as int? ?? 0;
+    _currentDateStr = data['current_date_str_v1'] as String?;
     
     checkAndResetDailyCounters();
 
     // Load deposits
-    final depositsJson = prefs.getStringList(_kDeposits) ?? [];
+    final depositsList = data[_kDeposits] as List<dynamic>? ?? [];
     _deposits.clear();
-    for (final raw in depositsJson) {
+    for (final raw in depositsList) {
       try {
-        _deposits
-            .add(Deposit.fromJson(jsonDecode(raw) as Map<String, dynamic>));
+        _deposits.add(Deposit.fromJson(raw as Map<String, dynamic>));
       } catch (_) {
         // Skip corrupted entry
       }
     }
 
     // Migrate old streak logic if needed
-    if (prefs.getInt('current_streak_v1') == null && _deposits.isNotEmpty) {
+    if (data['current_streak_v1'] == null && _deposits.isNotEmpty) {
       _currentStreak = _calculateOldStreak();
-      _lastDepositDate = uniqueDepositDates.last;
+      final dates = uniqueDepositDates;
+      _lastDepositDate = dates.isNotEmpty ? dates.last : null;
       await _persist();
     }
 
@@ -194,46 +230,37 @@ class SavingsProvider extends ChangeNotifier {
   // ── Persistence helpers ───────────────────────────────────────────────────
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    if (_userProfile != null) {
-      await prefs.setString(
-          _kUserProfile, jsonEncode(_userProfile!.toJson()));
-    } else {
-      await prefs.remove(_kUserProfile);
-    }
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
 
-    await prefs.setStringList(
-      _kDeposits,
-      _deposits.map((d) => jsonEncode(d.toJson())).toList(),
-    );
+    final updateData = <String, dynamic>{
+      _kUserProfile: _userProfile != null ? _userProfile!.toJson() : FieldValue.delete(),
+      _kDeposits: _deposits.map((d) => d.toJson()).toList(),
+      'current_streak_v1': _currentStreak,
+      'lifebuoys_v1': _lifebuoys,
+      'last_deposit_date_v1': _lastDepositDate != null ? _lastDepositDate!.toIso8601String() : FieldValue.delete(),
+      'wooden_coins_v1': _woodenCoins,
+      'last_daily_claim_v1': _lastDailyClaimDate ?? FieldValue.delete(),
+      'ads_watched_v1': _adsWatchedToday,
+      'shares_done_v1': _sharesDoneToday,
+      'current_date_str_v1': _currentDateStr ?? FieldValue.delete(),
+    };
 
-    await prefs.setInt('current_streak_v1', _currentStreak);
-    await prefs.setInt('lifebuoys_v1', _lifebuoys);
-    if (_lastDepositDate != null) {
-      await prefs.setString('last_deposit_date_v1', _lastDepositDate!.toIso8601String());
-    } else {
-      await prefs.remove('last_deposit_date_v1');
-    }
-
-    await prefs.setInt('wooden_coins_v1', _woodenCoins);
-    if (_lastDailyClaimDate != null) {
-      await prefs.setString('last_daily_claim_v1', _lastDailyClaimDate!);
-    } else {
-      await prefs.remove('last_daily_claim_v1');
-    }
-    await prefs.setInt('ads_watched_v1', _adsWatchedToday);
-    await prefs.setInt('shares_done_v1', _sharesDoneToday);
-    if (_currentDateStr != null) {
-      await prefs.setString('current_date_str_v1', _currentDateStr!);
-    } else {
-      await prefs.remove('current_date_str_v1');
-    }
+    await docRef.set(updateData, SetOptions(merge: true));
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
+  Future<void> login(String email, String password) async {
+    await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+    await init();
+  }
+
   Future<void> signUp({
+    required String email,
+    required String password,
     required String fullName,
     required String gender,
     required String contact,
@@ -242,6 +269,8 @@ class SavingsProvider extends ChangeNotifier {
     required String goal,
     required String challengeType,
   }) async {
+    await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+    
     _userProfile = UserProfile(
       fullName: fullName,
       gender: gender,
@@ -251,8 +280,18 @@ class SavingsProvider extends ChangeNotifier {
       goal: goal,
       challengeType: challengeType,
     );
+    _deposits.clear();
+    _currentStreak = 0;
+    _lifebuoys = 0;
+    _lastDepositDate = null;
+    _woodenCoins = 0;
+    _lastDailyClaimDate = null;
+    _adsWatchedToday = 0;
+    _sharesDoneToday = 0;
+    _currentDateStr = null;
     notifyListeners();
     await _persist();
+    await init();
   }
 
   Future<void> signInWithGoogle() async {
@@ -431,14 +470,7 @@ class SavingsProvider extends ChangeNotifier {
     _sharesDoneToday = 0;
     _currentDateStr = null;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kUserProfile);
-    await prefs.remove(_kDeposits);
-    await prefs.remove('wooden_coins_v1');
-    await prefs.remove('last_daily_claim_v1');
-    await prefs.remove('ads_watched_v1');
-    await prefs.remove('shares_done_v1');
-    await prefs.remove('current_date_str_v1');
+    await FirebaseAuth.instance.signOut();
   }
 
   // ── Debug Helpers ────────────────────────────────────────────────────────

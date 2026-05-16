@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/savings_provider.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
@@ -16,6 +17,7 @@ class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   int _currentStep = 0;
+  bool _isLoginMode = true;
 
   // Step-1
   final _formKey = GlobalKey<FormState>();
@@ -50,11 +52,50 @@ class _AuthScreenState extends State<AuthScreen>
     return null;
   }
 
+  String _getValidEmail() {
+    final contact = _contactController.text.trim();
+    if (!contact.contains('@')) {
+      return '$contact@onehundred.app';
+    }
+    return contact;
+  }
+
   // ── Navigation ───────────────────────────────────────────────────────────
+  void _login() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+    
+    try {
+      final email = _getValidEmail();
+      final password = _passwordController.text;
+      await context.read<SavingsProvider>().login(email, password);
+      
+      if (mounted) {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      }
+    } on FirebaseAuthException catch (e) {
+      String msg = e.message ?? 'حدث خطأ';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+        msg = 'البريد الإلكتروني أو الرمز السري غير صحيح.';
+      } else if (e.code == 'invalid-email') {
+        msg = 'صيغة الإيميل غير صحيحة.';
+      } else if (e.code == 'operation-not-allowed') {
+        msg = 'يجب تفعيل Email/Password من Firebase Console';
+      }
+      _showSnack('خطأ: $msg');
+    } catch (e) {
+      _showSnack('خطأ غير متوقع: $e');
+    }
+  }
+
   void _nextStep() {
     FocusScope.of(context).unfocus();
     if (_currentStep == 0) {
       if (!_formKey.currentState!.validate()) return;
+      if (!_isLoginMode && _nameController.text.trim().isEmpty) {
+        _showSnack('الرجاء إدخال اسمك');
+        return;
+      }
     }
     if (_currentStep == 1 && _selectedStatus.isEmpty) {
       _showSnack('الرجاء اختيار حالتك الاجتماعية');
@@ -100,27 +141,48 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-  void _finish() {
+  void _finish() async {
     if (_selectedChallengeType.isEmpty) {
       _showSnack('الرجاء اختيار نوع التحدي');
       return;
     }
-    context.read<SavingsProvider>().signUp(
-      fullName: _nameController.text.trim(),
-      gender:
-          _selectedStatus.contains('شابة') || _selectedStatus.contains('متزوجة')
-          ? 'Female'
-          : 'Male',
-      contact: _contactController.text.trim(),
-      financialGoal: 5050.0,
-      maritalStatus: _selectedStatus,
-      goal: _selectedGoal,
-      challengeType: _selectedChallengeType,
-    );
+    
+    try {
+      await context.read<SavingsProvider>().signUp(
+        email: _getValidEmail(),
+        password: _passwordController.text,
+        fullName: _nameController.text.trim(),
+        gender:
+            _selectedStatus.contains('شابة') || _selectedStatus.contains('متزوجة')
+            ? 'Female'
+            : 'Male',
+        contact: _contactController.text.trim(),
+        financialGoal: 5050.0,
+        maritalStatus: _selectedStatus,
+        goal: _selectedGoal,
+        challengeType: _selectedChallengeType,
+      );
 
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      }
+    } on FirebaseAuthException catch (e) {
+      String msg = e.message ?? 'حدث خطأ غير معروف';
+      if (e.code == 'email-already-in-use') {
+        msg = 'هذا الحساب موجود مسبقاً، الرجاء تسجيل الدخول.';
+      } else if (e.code == 'invalid-email') {
+        msg = 'صيغة الإيميل غير صحيحة.';
+      } else if (e.code == 'operation-not-allowed') {
+        msg = 'تسجيل الدخول بالبريد الإلكتروني غير مفعل في Firebase Console.';
+      } else if (e.code == 'weak-password') {
+        msg = 'الرمز السري ضعيف جداً.';
+      }
+      _showSnack('خطأ في التسجيل: $msg');
+    } catch (e) {
+      _showSnack('خطأ غير متوقع: $e');
+    }
   }
 
   void _signInWithGoogle() {
@@ -149,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen>
           children: [
             // ── Progress dots (always visible at top) ──
             const SizedBox(height: 16),
-            _StepDots(currentStep: _currentStep),
+            if (!_isLoginMode) _StepDots(currentStep: _currentStep),
             const SizedBox(height: 8),
 
             // ── Pages ──
@@ -161,6 +223,7 @@ class _AuthScreenState extends State<AuthScreen>
                   // Page 1: has logo + greeting inside
                   _Step1InfoPage(
                     formKey: _formKey,
+                    isLoginMode: _isLoginMode,
                     nameController: _nameController,
                     contactController: _contactController,
                     passwordController: _passwordController,
@@ -168,7 +231,14 @@ class _AuthScreenState extends State<AuthScreen>
                     validateContact: _validateContact,
                     onTogglePassword: () =>
                         setState(() => _obscurePassword = !_obscurePassword),
-                    onSignIn: _nextStep,
+                    onToggleMode: () {
+                      setState(() {
+                        _isLoginMode = !_isLoginMode;
+                        _formKey.currentState?.reset();
+                      });
+                    },
+                    onLogin: _login,
+                    onNextStep: _nextStep,
                     onGoogleSignIn: _signInWithGoogle,
                   ),
                   // Pages 2-4: title inside the page, no logo
@@ -233,24 +303,30 @@ class _StepDots extends StatelessWidget {
 // ─── Step 1 – Name / Contact / Password (has logo inside) ────────────────────
 class _Step1InfoPage extends StatelessWidget {
   final GlobalKey<FormState> formKey;
+  final bool isLoginMode;
   final TextEditingController nameController;
   final TextEditingController contactController;
   final TextEditingController passwordController;
   final bool obscurePassword;
   final String? Function(String?) validateContact;
   final VoidCallback onTogglePassword;
-  final VoidCallback onSignIn;
+  final VoidCallback onToggleMode;
+  final VoidCallback onLogin;
+  final VoidCallback onNextStep;
   final VoidCallback onGoogleSignIn;
 
   const _Step1InfoPage({
     required this.formKey,
+    required this.isLoginMode,
     required this.nameController,
     required this.contactController,
     required this.passwordController,
     required this.obscurePassword,
     required this.validateContact,
     required this.onTogglePassword,
-    required this.onSignIn,
+    required this.onToggleMode,
+    required this.onLogin,
+    required this.onNextStep,
     required this.onGoogleSignIn,
   });
 
@@ -278,34 +354,36 @@ class _Step1InfoPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'أهلاً بك! 👋',
+            Text(
+              isLoginMode ? 'أهلاً بك مجدداً! 👋' : 'أهلاً بك! 👋',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.charcoal,
                 fontWeight: FontWeight.w700,
                 fontSize: 22,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'ابدأ رحلة الادخار الآن',
+            Text(
+              isLoginMode ? 'سجل دخولك لمتابعة تحدي الادخار' : 'ابدأ رحلة الادخار الآن بإنشاء حسابك',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 28),
 
             // ── Full Name
-            _StyledField(
-              controller: nameController,
-              label: 'الاسم الكامل',
-              hint: 'أدخل اسمك',
-              icon: Icons.person_outline_rounded,
-              textCapitalization: TextCapitalization.words,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'الرجاء إدخال اسمك' : null,
-            ),
-            const SizedBox(height: 14),
+            if (!isLoginMode) ...[
+              _StyledField(
+                controller: nameController,
+                label: 'الاسم الكامل',
+                hint: 'أدخل اسمك',
+                icon: Icons.person_outline_rounded,
+                textCapitalization: TextCapitalization.words,
+                validator: (v) =>
+                    (!isLoginMode && (v == null || v.trim().isEmpty)) ? 'الرجاء إدخال اسمك' : null,
+              ),
+              const SizedBox(height: 14),
+            ],
 
             // ── Email or Phone
             _StyledField(
@@ -343,18 +421,28 @@ class _Step1InfoPage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // ── Sign In button
+            // ── Sign In / Next button
             SizedBox(
               height: 54,
               child: ElevatedButton(
-                onPressed: onSignIn,
-                child: const Text(
-                  'إنشاء الحساب',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                onPressed: isLoginMode ? onLogin : onNextStep,
+                child: Text(
+                  isLoginMode ? 'تسجيل الدخول' : 'التالي',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // ── Toggle Login/Register
+            TextButton(
+              onPressed: onToggleMode,
+              child: Text(
+                isLoginMode ? 'ليس لديك حساب؟ إنشاء حساب جديد' : 'لديك حساب بالفعل؟ تسجيل الدخول',
+                style: const TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 10),
 
             // ── Divider
             Row(

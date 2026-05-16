@@ -156,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         expand: false,
-        builder: (context, scrollController) => SafeArea(
+        builder: (sheetContext, scrollController) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Column(
@@ -175,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           Navigator.pop(ctx);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_insight_date');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowDailyInsight(context);
                         },
                       ),
@@ -189,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(7);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_quest_date');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowWeeklyQuest(context, 7);
                           _refreshPendingQuestBadge();
                         },
@@ -204,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(14);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_quest_date');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowWeeklyQuest(context, 14);
                           _refreshPendingQuestBadge();
                         },
@@ -218,7 +218,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(25);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowMilestone(context, 25);
                         },
                       ),
@@ -231,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(50);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowMilestone(context, 50);
                         },
                       ),
@@ -244,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(75);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowMilestone(context, 75);
                         },
                       ),
@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(100);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!context.mounted) return;
+                          if (!mounted) return;
                           await checkAndShowMilestone(context, 100);
                         },
                       ),
