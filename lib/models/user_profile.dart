@@ -14,6 +14,9 @@ class UserProfile {
   /// نوع التحدي: 'فردي' | 'تعاوني' | 'تنافسي'
   final String challengeType;
 
+  /// تاريخ الميلاد
+  final DateTime? birthDate;
+
   UserProfile({
     required this.fullName,
     required this.gender,
@@ -22,6 +25,7 @@ class UserProfile {
     this.maritalStatus = 'شاب',
     this.goal = 'بيت',
     this.challengeType = 'فردي',
+    this.birthDate,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -33,6 +37,7 @@ class UserProfile {
       maritalStatus: json['maritalStatus'] as String? ?? 'شاب',
       goal: json['goal'] as String? ?? 'بيت',
       challengeType: json['challengeType'] as String? ?? 'فردي',
+      birthDate: json['birthDate'] != null ? DateTime.tryParse(json['birthDate']) : null,
     );
   }
 
@@ -45,6 +50,7 @@ class UserProfile {
       'maritalStatus': maritalStatus,
       'goal': goal,
       'challengeType': challengeType,
+      'birthDate': birthDate?.toIso8601String(),
     };
   }
 }

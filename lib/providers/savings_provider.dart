@@ -268,6 +268,7 @@ class SavingsProvider extends ChangeNotifier {
     required String maritalStatus,
     required String goal,
     required String challengeType,
+    DateTime? birthDate,
   }) async {
     await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
     
@@ -279,6 +280,7 @@ class SavingsProvider extends ChangeNotifier {
       maritalStatus: maritalStatus,
       goal: goal,
       challengeType: challengeType,
+      birthDate: birthDate,
     );
     _deposits.clear();
     _currentStreak = 0;

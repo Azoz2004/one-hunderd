@@ -28,9 +28,11 @@ class _AuthScreenState extends State<AuthScreen>
 
   // Step-2
   String _selectedStatus = '';
+  DateTime? _selectedBirthDate;
 
   // Step-3
   String _selectedGoal = '';
+  final _targetAmountController = TextEditingController();
 
   // Step-4
   String _selectedChallengeType = '';
@@ -97,13 +99,25 @@ class _AuthScreenState extends State<AuthScreen>
         return;
       }
     }
-    if (_currentStep == 1 && _selectedStatus.isEmpty) {
-      _showSnack('الرجاء اختيار حالتك الاجتماعية');
-      return;
+    if (_currentStep == 1) {
+      if (_selectedStatus.isEmpty) {
+        _showSnack('الرجاء اختيار حالتك الاجتماعية');
+        return;
+      }
+      if (_selectedBirthDate == null) {
+        _showSnack('الرجاء إدخال تاريخ ميلادك');
+        return;
+      }
     }
-    if (_currentStep == 2 && _selectedGoal.isEmpty) {
-      _showSnack('الرجاء اختيار هدفك');
-      return;
+    if (_currentStep == 2) {
+      if (_selectedGoal.isEmpty) {
+        _showSnack('الرجاء اختيار هدفك');
+        return;
+      }
+      if (_targetAmountController.text.trim().isEmpty) {
+        _showSnack('الرجاء إدخال مبلغ الهدف');
+        return;
+      }
     }
 
     if (_currentStep < 3) {
@@ -147,6 +161,9 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
     
+    final targetAmountText = _targetAmountController.text.trim().replaceAll(RegExp(r'[^0-9.]'), '');
+    final double? parsedAmount = double.tryParse(targetAmountText);
+
     try {
       await context.read<SavingsProvider>().signUp(
         email: _getValidEmail(),
@@ -157,10 +174,11 @@ class _AuthScreenState extends State<AuthScreen>
             ? 'Female'
             : 'Male',
         contact: _contactController.text.trim(),
-        financialGoal: 5050.0,
+        financialGoal: parsedAmount ?? 5050.0,
         maritalStatus: _selectedStatus,
         goal: _selectedGoal,
         challengeType: _selectedChallengeType,
+        birthDate: _selectedBirthDate,
       );
 
       if (mounted) {
@@ -198,6 +216,7 @@ class _AuthScreenState extends State<AuthScreen>
     _nameController.dispose();
     _contactController.dispose();
     _passwordController.dispose();
+    _targetAmountController.dispose();
     super.dispose();
   }
 
@@ -244,10 +263,13 @@ class _AuthScreenState extends State<AuthScreen>
                   // Pages 2-4: title inside the page, no logo
                   _Step2StatusPage(
                     selected: _selectedStatus,
+                    selectedDate: _selectedBirthDate,
                     onSelect: (v) => setState(() => _selectedStatus = v),
+                    onSelectDate: (v) => setState(() => _selectedBirthDate = v),
                   ),
                   _Step3GoalPage(
                     selected: _selectedGoal,
+                    amountController: _targetAmountController,
                     onSelect: (v) => setState(() => _selectedGoal = v),
                   ),
                   _Step4ChallengePage(
@@ -575,9 +597,16 @@ class _PageTitle extends StatelessWidget {
 // ─── Step 2 – Marital Status ──────────────────────────────────────────────────
 class _Step2StatusPage extends StatelessWidget {
   final String selected;
+  final DateTime? selectedDate;
   final ValueChanged<String> onSelect;
+  final ValueChanged<DateTime?> onSelectDate;
 
-  const _Step2StatusPage({required this.selected, required this.onSelect});
+  const _Step2StatusPage({
+    required this.selected,
+    required this.selectedDate,
+    required this.onSelect,
+    required this.onSelectDate,
+  });
 
   static const _options = [
     StatusOption(
@@ -611,6 +640,7 @@ class _Step2StatusPage extends StatelessWidget {
           title: 'ما هي حالتك؟',
           subtitle: 'اختر وضعك الاجتماعي',
         ),
+        
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -625,7 +655,82 @@ class _Step2StatusPage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
+
+        // ── Date Picker
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                'تاريخ الميلاد',
+                style: TextStyle(
+                  color: AppColors.charcoal,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate ?? DateTime(2000),
+                    firstDate: DateTime(1920),
+                    lastDate: DateTime.now(),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.light(
+                            primary: AppColors.charcoal,
+                            onPrimary: AppColors.white,
+                            onSurface: AppColors.charcoal,
+                          ),
+                          textButtonTheme: TextButtonThemeData(
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.charcoal,
+                            ),
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (date != null) {
+                    onSelectDate(date);
+                  }
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardFill,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, color: AppColors.textSecondary, size: 20),
+                      Text(
+                        selectedDate != null
+                            ? '${selectedDate!.year}/${selectedDate!.month}/${selectedDate!.day}'
+                            : 'اختر تاريخ ميلادك',
+                        style: TextStyle(
+                          color: selectedDate != null ? AppColors.charcoal : AppColors.textSecondary,
+                          fontSize: 15,
+                          fontWeight: selectedDate != null ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -645,9 +750,14 @@ class StatusOption {
 // ─── Step 3 – Goal ───────────────────────────────────────────────────────────
 class _Step3GoalPage extends StatelessWidget {
   final String selected;
+  final TextEditingController amountController;
   final ValueChanged<String> onSelect;
 
-  const _Step3GoalPage({required this.selected, required this.onSelect});
+  const _Step3GoalPage({
+    required this.selected,
+    required this.amountController,
+    required this.onSelect,
+  });
 
   static const _options = [
     GoalOption(
@@ -673,6 +783,7 @@ class _Step3GoalPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _PageTitle(title: 'ما هو هدفك؟', subtitle: 'حدد ما تسعى إليه'),
+        
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -687,7 +798,52 @@ class _Step3GoalPage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
+
+        // ── Target Amount Field
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                'مبلغ الهدف',
+                style: TextStyle(
+                  color: AppColors.charcoal,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                textDirection: TextDirection.rtl,
+                decoration: InputDecoration(
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('JD', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.cardFill,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.border, width: 1.5),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.border, width: 1.5),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.charcoal, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

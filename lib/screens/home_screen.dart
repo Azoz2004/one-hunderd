@@ -9,6 +9,8 @@ import '../widgets/savings_grid.dart';
 import '../widgets/streak_card.dart';
 import '../services/notification_service.dart';
 import 'auth_screen.dart';
+import 'profile_screen.dart';
+import 'leaderboard_screen.dart';
 
 /// Home screen designed to mirror the physical sticker layout:
 /// a house-shaped card with the 100-day grid inside, decorative
@@ -316,41 +318,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (user == null) return const AuthScreen();
 
     return Scaffold(
+      drawer: _AppDrawer(provider: provider),
       body: Stack(
         children: [
-          // ── Decorative background arcs ──
           const _BackgroundDecor(),
-
-          // ── Main content ──
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-              child: Column(
-                children: [
-                  // ── Top bar ──
-                  _TopBar(
-                    userName: user.fullName,
-                    provider: provider,
-                    hasPendingQuest: _hasPendingQuest,
-                    onQuestBadgeTap: () async {
-                      await checkAndShowPendingQuest(context, provider.completedDays);
-                      _refreshPendingQuestBadge();
-                    },
+            child: CustomScrollView(
+              slivers: [
+                // ── Sticky App Bar ──
+                SliverAppBar(
+                  pinned: true,
+                  floating: false,
+                  backgroundColor: AppColors.background,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  automaticallyImplyLeading: false,
+                  titleSpacing: 0,
+                  title: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _TopBar(
+                      provider: provider,
+                      hasPendingQuest: _hasPendingQuest,
+                      onQuestBadgeTap: () async {
+                        await checkAndShowPendingQuest(context, provider.completedDays);
+                        _refreshPendingQuestBadge();
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                ),
 
-                  // ── House-shaped sticker card ──
-                  _HouseCard(user: user, provider: provider),
-                  const SizedBox(height: 16),
-
-                  // ── Streak card ──
-                  const StreakCard(),
-                  const SizedBox(height: 12),
-
-                  // ── Summary stats ──
-                  _SummaryRow(provider: provider),
-                ],
-              ),
+                // ── Main content ──
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _HouseCard(user: user, provider: provider),
+                      const SizedBox(height: 16),
+                      const StreakCard(),
+                      const SizedBox(height: 12),
+                      _SummaryRow(provider: provider),
+                    ]),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -386,14 +396,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // Top Bar — original layout preserved, pending quest badge added
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── App Drawer ───────────────────────────────────────────────────────────────
+class _AppDrawer extends StatelessWidget {
+  final SavingsProvider provider;
+  const _AppDrawer({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppColors.background,
+      child: Column(
+        children: [
+          // Top safe area padding only
+          const SafeArea(bottom: false, child: SizedBox.shrink()),
+          // Menu Items
+          _DrawerItem(
+            icon: Icons.person_outline_rounded,
+            label: 'الملف الشخصي',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+            },
+          ),
+          _DrawerItem(
+            icon: Icons.emoji_events_rounded,
+            label: 'لوحة الصدارة',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
+            },
+          ),
+          const Spacer(),
+          const Divider(color: AppColors.borderLight, height: 1),
+          _DrawerItem(
+            icon: Icons.logout_rounded,
+            label: 'تسجيل الخروج',
+            color: AppColors.error,
+            onTap: () {
+              Navigator.pop(context);
+              provider.signOut();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const AuthScreen()),
+              );
+            },
+          ),
+          const SafeArea(top: false, child: SizedBox.shrink()),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+  const _DrawerItem({required this.icon, required this.label, required this.onTap, this.color = AppColors.charcoal});
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon, color: color, size: 22),
+    title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 15)),
+    onTap: onTap,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Top Bar — hamburger + original layout
+// ═══════════════════════════════════════════════════════════════════════════════
+
 class _TopBar extends StatelessWidget {
-  final String userName;
   final SavingsProvider provider;
   final bool hasPendingQuest;
   final VoidCallback onQuestBadgeTap;
 
   const _TopBar({
-    required this.userName,
     required this.provider,
     required this.hasPendingQuest,
     required this.onQuestBadgeTap,
@@ -403,12 +483,20 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            'Hello, ${userName.split(' ').first} 👋',
-            style: Theme.of(context).textTheme.titleLarge,
+        // ── Hamburger Menu ──
+        GestureDetector(
+          onTap: () => Scaffold.of(context).openDrawer(),
+          child: Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.cardFill,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: const Icon(Icons.menu_rounded, size: 20, color: AppColors.charcoal),
           ),
         ),
+        const Spacer(),
 
         // ── Pending quest badge (new, non-breaking) ──
         if (hasPendingQuest)
