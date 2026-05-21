@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,6 +24,7 @@ class SavingsProvider extends ChangeNotifier {
   int _currentStreak = 0;
   int _lifebuoys = 0;
   DateTime? _lastDepositDate;
+  DateTime? _completedAt;
 
   int _woodenCoins = 0;
   String? _lastDailyClaimDate;
@@ -82,6 +83,7 @@ class SavingsProvider extends ChangeNotifier {
   
   int get lifebuoys => _lifebuoys;
   DateTime? get lastDepositDate => _lastDepositDate;
+  DateTime? get completedAt => _completedAt;
 
   int get woodenCoins => _woodenCoins;
   String? get lastDailyClaimDate => _lastDailyClaimDate;
@@ -196,6 +198,11 @@ class SavingsProvider extends ChangeNotifier {
       _lastDepositDate = DateTime.tryParse(lastDateStr);
     }
 
+    final completedAtTs = data['completedAt'] as Timestamp?;
+    if (completedAtTs != null) {
+      _completedAt = completedAtTs.toDate();
+    }
+
     // Load coins and daily counters
     _woodenCoins = data['wooden_coins_v1'] as int? ?? 0;
     _lastDailyClaimDate = data['last_daily_claim_v1'] as String?;
@@ -224,6 +231,12 @@ class SavingsProvider extends ChangeNotifier {
       await _persist();
     }
 
+    // Migrate completedAt if missing for completed users
+    if (isComplete && _completedAt == null) {
+      _completedAt = _lastDepositDate ?? DateTime.now();
+      await _persist();
+    }
+
     notifyListeners();
   }
 
@@ -234,6 +247,12 @@ class SavingsProvider extends ChangeNotifier {
     if (user == null) return;
 
     final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+    if (isComplete && _completedAt == null) {
+      _completedAt = _lastDepositDate ?? DateTime.now();
+    } else if (!isComplete) {
+      _completedAt = null;
+    }
 
     final updateData = <String, dynamic>{
       _kUserProfile: _userProfile != null ? _userProfile!.toJson() : FieldValue.delete(),
@@ -246,6 +265,11 @@ class SavingsProvider extends ChangeNotifier {
       'ads_watched_v1': _adsWatchedToday,
       'shares_done_v1': _sharesDoneToday,
       'current_date_str_v1': _currentDateStr ?? FieldValue.delete(),
+      // ─ حقل لتمكين الفرز في لوحة الصدارة من طرف الخادم مباشرة ─
+      'completed_days_count': completedDays,
+      // ─ علامة الإتمام لتبويب نادي المئة ─
+      'is_complete_v1': isComplete,
+      'completedAt': _completedAt != null ? Timestamp.fromDate(_completedAt!) : FieldValue.delete(),
     };
 
     await docRef.set(updateData, SetOptions(merge: true));
@@ -291,23 +315,15 @@ class SavingsProvider extends ChangeNotifier {
     _adsWatchedToday = 0;
     _sharesDoneToday = 0;
     _currentDateStr = null;
+    _completedAt = null;
     notifyListeners();
     await _persist();
     await init();
   }
 
   Future<void> signInWithGoogle() async {
-    _userProfile = UserProfile(
-      fullName: 'Ahmad Al-Masri',
-      gender: 'Male',
-      contact: 'ahmad@gmail.com',
-      financialGoal: 5050.0,
-      maritalStatus: 'شاب',
-      goal: 'بيت',
-      challengeType: 'فردي',
-    );
-    notifyListeners();
-    await _persist();
+    // Google Sign-In سيتم تفعيله لاحقاً بعد إعداد SHA-1 وتحديث google-services.json
+    throw Exception('تسجيل الدخول بـ Google غير متاح حالياً. الرجاء استخدام الإيميل.');
   }
 
   /// Log a new deposit. Can be called multiple times per day.
@@ -317,6 +333,21 @@ class SavingsProvider extends ChangeNotifier {
   }) async {
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
+
+    // ─── حماية من التلاعب بالوقت (النهج الهجين) ───────────────────────────────
+    // 1. التحقق الخلفي (أوفلاين/أونلاين): منع التراجع بالزمن
+    if (_lastDepositDate != null && todayOnly.isBefore(_lastDepositDate!)) {
+      throw Exception('لا يمكن تسجيل إيداع بتاريخ يسبق تاريخ آخر إيداع مسجل!');
+    }
+
+    // 2. التحقق الأمامي (أونلاين): منع تقديم التاريخ المحلي عن وقت الشبكة
+    final networkTime = await _getNetworkTime();
+    if (networkTime != null) {
+      final networkOnly = DateTime(networkTime.year, networkTime.month, networkTime.day);
+      if (todayOnly.isAfter(networkOnly)) {
+        throw Exception('تنبيه: تم الكشف عن تلاعب بالوقت! وقت هاتفك متقدم عن الوقت الحقيقي. يرجى ضبط وقت الهاتف على الوضع التلقائي.');
+      }
+    }
 
     if (_lastDepositDate == null) {
       _currentStreak = 1;
@@ -339,6 +370,35 @@ class SavingsProvider extends ChangeNotifier {
     ));
     notifyListeners();
     await _persist();
+
+    // ─ حماية من التلاعب بالوقت: حفظ Server Timestamp في Firestore ─
+    // يُستخدم هذا الحقل للتحقق المستقبلي من صحة التواريخ
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({'last_deposit_server_ts': FieldValue.serverTimestamp()}, SetOptions(merge: true))
+          .catchError((_) {}); // لا نوقف العملية إذا فشل الطلب
+    }
+  }
+
+  Future<DateTime?> _getNetworkTime() async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 3);
+      final request = await client.headUrl(Uri.parse('https://www.google.com'));
+      final response = await request.close();
+      final dateHeader = response.headers.value(HttpHeaders.dateHeader);
+      if (dateHeader != null) {
+        return HttpDate.parse(dateHeader);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching network time: $e');
+      }
+    }
+    return null;
   }
 
   Future<void> updateDeposit(String id, {required double amount, String? notes}) async {
@@ -471,6 +531,7 @@ class SavingsProvider extends ChangeNotifier {
     _adsWatchedToday = 0;
     _sharesDoneToday = 0;
     _currentDateStr = null;
+    _completedAt = null;
     notifyListeners();
     await FirebaseAuth.instance.signOut();
   }
@@ -496,6 +557,7 @@ class SavingsProvider extends ChangeNotifier {
     _currentStreak = 0;
     _lifebuoys = 0;
     _lastDepositDate = null;
+    _completedAt = null;
     notifyListeners();
     await _persist();
     final prefs = await SharedPreferences.getInstance();

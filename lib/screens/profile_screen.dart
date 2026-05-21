@@ -228,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final profile = _data?['user_profile_v1'] as Map<String, dynamic>? ?? {};
-    final fullName = profile['fullName'] as String? ?? 'User';
+    final fullName = profile['fullName'] as String? ?? 'مستخدم';
     final contact = profile['contact'] as String? ?? '';
     final birthDateStr = profile['birthDate'] as String?;
     final age = _calcAge(birthDateStr);

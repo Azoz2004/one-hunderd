@@ -34,67 +34,71 @@ class _LS extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
         backgroundColor: AppColors.background,
-        elevation: 0,
-        titleSpacing: 0,
-        centerTitle: false,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: _r3Grad),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 20),
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          titleSpacing: 0,
+          centerTitle: false,
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
           ),
-          const SizedBox(width: 10),
-          const Text('لوحة الصدارة',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-        ]),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.cardFill,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.borderLight),
-            ),
-            child: TabBar(
-              controller: _tc,
-              labelColor: AppColors.white,
-              unselectedLabelColor: AppColors.textSecondary,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.charcoal, Color(0xFF4A3828)]),
+          title: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: _r3Grad),
                 borderRadius: BorderRadius.circular(10),
               ),
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10),
-              padding: const EdgeInsets.all(3),
-              tabs: const [
-                Tab(text: 'الالتزام'),
-                Tab(text: 'الساعون للمئة'),
-                Tab(text: 'نادي المئة'),
-              ],
+              child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text('لوحة الصدارة',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+          ]),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.cardFill,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: TabBar(
+                controller: _tc,
+                labelColor: AppColors.white,
+                unselectedLabelColor: AppColors.textSecondary,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AppColors.charcoal, Color(0xFF4A3828)]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10),
+                padding: const EdgeInsets.all(3),
+                tabs: const [
+                  Tab(text: 'الالتزام'),
+                  Tab(text: 'الساعون للمئة'),
+                  Tab(text: 'نادي المئة'),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tc,
-        children: [
-          _LeaderTab(mode: _Mode.streak, uid: _uid),
-          _LeaderTab(mode: _Mode.road,   uid: _uid),
-          _LeaderTab(mode: _Mode.club,   uid: _uid),
-        ],
+        body: TabBarView(
+          controller: _tc,
+          children: [
+            _LeaderTab(mode: _Mode.streak, uid: _uid),
+            _LeaderTab(mode: _Mode.road,   uid: _uid),
+            _LeaderTab(mode: _Mode.club,   uid: _uid),
+          ],
+        ),
       ),
     );
   }
@@ -117,58 +121,82 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
   @override bool get wantKeepAlive => true;
   @override void initState() { super.initState(); _fetch(); }
 
-  int _days(Map<String, dynamic> u) =>
-      (u['deposits_v1'] as List? ?? []).length;
+  int _days(Map<String, dynamic> u) {
+    // نستخدم الحقل المحسوب أولاً (أسرع)، وإلا نحسبه من المصفوفة كـ fallback
+    final cached = u['completed_days_count'] as int?;
+    if (cached != null) return cached;
+    return (u['deposits_v1'] as List? ?? []).length;
+  }
 
   bool _isComplete(Map<String, dynamic> u) =>
       (u['is_complete_v1'] as bool? ?? false) || _days(u) >= 100;
 
+  /// يبني الـ Query المناسب لكل تبويب ويجلب البيانات من الخادم مباشرة
   Future<void> _fetch() async {
     if (mounted) setState(() { _loading = true; _error = null; });
     try {
-      // Fetch all users client-side — avoids Firestore composite index requirements
-      final snap = await FirebaseFirestore.instance.collection('users').get();
-      final all = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-
       List<Map<String, dynamic>> users;
-      switch (widget.mode) {
-        case _Mode.streak:
-          users = List.from(all)..sort((a, b) {
-            final sa = a['current_streak_v1'] as int? ?? 0;
-            final sb = b['current_streak_v1'] as int? ?? 0;
-            return sb.compareTo(sa);
-          });
-        case _Mode.road:
-          users = all.where((u) => !_isComplete(u)).toList()
-            ..sort((a, b) => _days(b).compareTo(_days(a)));
-        case _Mode.club:
-          users = all.where(_isComplete).toList()..sort((a, b) {
-            final ta = a['completedAt'];
-            final tb = b['completedAt'];
-            if (ta is Timestamp && tb is Timestamp) return ta.compareTo(tb);
-            if (ta is Timestamp) return -1;
-            if (tb is Timestamp) return 1;
-            return 0;
-          });
-      }
-      if (users.length > 100) users = users.sublist(0, 100);
+      final col = FirebaseFirestore.instance.collection('users');
 
+      switch (widget.mode) {
+        // ── تبويب الالتزام: مرتّب بـ current_streak من الخادم ─────────────────
+        case _Mode.streak:
+          final snap = await col
+              .orderBy('current_streak_v1', descending: true)
+              .limit(100)
+              .get();
+          users = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+
+        // ── الساعون للمئة: لم يكملوا 100 يوم، مرتّبون بعدد الأيام ──────────
+        case _Mode.road:
+          final snap = await col
+              .where('is_complete_v1', isEqualTo: false)
+              .orderBy('completed_days_count', descending: true)
+              .limit(100)
+              .get();
+          // fallback: بعض المستخدمين القدامى قد لا يملكون is_complete_v1 بعد
+          final snapFallback = await col
+              .where('is_complete_v1', isNull: true)
+              .orderBy('completed_days_count', descending: true)
+              .limit(50)
+              .get();
+          final allDocs = {...{for (final d in snap.docs) d.id: d}, ...{for (final d in snapFallback.docs) d.id: d}};
+          users = allDocs.values.map((d) => {'id': d.id, ...d.data()}).toList();
+          users = users.where((u) => !_isComplete(u)).toList();
+          users.sort((a, b) => _days(b).compareTo(_days(a)));
+          if (users.length > 100) users = users.sublist(0, 100);
+
+        // ── نادي المئة: أكملوا التحدي، مرتّبون بتاريخ الإتمام ───────────────
+        case _Mode.club:
+          final snap = await col
+              .where('is_complete_v1', isEqualTo: true)
+              .orderBy('completedAt')
+              .limit(100)
+              .get();
+          users = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      }
+
+      // ── إيجاد المستخدم الحالي ────────────────────────────────────────────
       final myIdx = users.indexWhere((u) => u['id'] == widget.uid);
       Map<String, dynamic>? myData = myIdx >= 0 ? users[myIdx] : null;
+
+      // إذا لم يكن ضمن الـ top 100 في هذا التبويب، نجلب بياناته منفردة للشريط السفلي
       if (myData == null && widget.uid.isNotEmpty) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users').doc(widget.uid).get();
+        final doc = await col.doc(widget.uid).get();
         if (doc.exists) { myData = {'id': doc.id, ...doc.data()!}; }
       }
 
-      if (mounted) setState(() {
-        _users  = users;
-        _myRank = myIdx >= 0 ? myIdx + 1 : -1;
-        _myData = myData;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _users  = users;
+          _myRank = myIdx >= 0 ? myIdx + 1 : -1;
+          _myData = myData;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = e.toString(); });
+      debugPrint('Firebase Error: ${e.toString()}');
+      if (mounted) { setState(() { _loading = false; _error = e.toString(); }); }
     }
   }
 
@@ -176,17 +204,42 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
   Widget build(BuildContext context) {
     super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.charcoal));
-    if (_error != null) return Center(
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.wifi_off_rounded, size: 40, color: AppColors.textSecondary),
+            const SizedBox(height: 12),
+            const Text('تعذّر تحميل البيانات',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text(_error!.contains('index') || _error!.contains('Index')
+                ? 'قد يحتاج الأمر لإعداد فهرس Firestore'
+                : '',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _fetch,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('إعادة المحاولة'),
+            ),
+          ]),
+        ),
+      );
+    }
+    if (_users.isEmpty) return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.wifi_off_rounded, size: 40, color: AppColors.textSecondary),
+        Icon(widget.mode == _Mode.club ? Icons.lock_rounded : Icons.people_outline_rounded,
+            size: 48, color: AppColors.borderLight),
         const SizedBox(height: 12),
-        Text('تعذّر تحميل البيانات', style: const TextStyle(color: AppColors.textSecondary)),
-        const SizedBox(height: 8),
-        TextButton(onPressed: _fetch, child: const Text('إعادة المحاولة')),
+        Text(widget.mode == _Mode.club
+            ? 'لا أحد أكمل التحدي بعد\nكن أول الأبطال! 🏆'
+            : 'لا يوجد بيانات بعد',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
       ]),
-    );
-    if (_users.isEmpty) return const Center(
-      child: Text('لا يوجد بيانات بعد', style: TextStyle(color: AppColors.textSecondary)),
     );
 
     final amIComplete = _myData != null && _isComplete(_myData!);
@@ -322,16 +375,7 @@ class _LeaderItem extends StatelessWidget {
         ] : null,
       ),
       child: Row(children: [
-        // Left accent bar for top 3
-        if (isTop)
-          Container(
-            width: 5, height: 72,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: _rankGrad(rank), begin: Alignment.topCenter, end: Alignment.bottomCenter),
-              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
-            ),
-          ),
-        // Rank number
+        // Rank number — يمين
         SizedBox(width: isTop ? 42 : 46, child: Center(child: rankW)),
         // Avatar
         Container(
@@ -342,12 +386,11 @@ class _LeaderItem extends StatelessWidget {
           ) : null,
           child: ClipOval(child: FacelessAvatar(index: avIdx, size: 46)),
         ),
-        const SizedBox(width: 12),
         // Info
         Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(name, textAlign: TextAlign.right,
+            Text(name, textAlign: TextAlign.start,
               style: TextStyle(
                 fontWeight: isTop ? FontWeight.w800 : FontWeight.w700,
                 fontSize: isTop ? 15 : 14,
@@ -355,7 +398,7 @@ class _LeaderItem extends StatelessWidget {
               ),
               maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 3),
-            Text(sub, textAlign: TextAlign.right,
+            Text(sub, textAlign: TextAlign.start,
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
         )),
@@ -375,7 +418,17 @@ class _LeaderItem extends StatelessWidget {
               color: isTop ? _rankBorder(rank) : AppColors.textSecondary,
             )),
         ),
-        const SizedBox(width: 12),
+        if (isTop) ...[
+          const SizedBox(width: 12),
+          Container(
+            width: 5, height: 72,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: _rankGrad(rank), begin: Alignment.topCenter, end: Alignment.bottomCenter),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+            ),
+          ),
+        ] else
+          const SizedBox(width: 12),
       ]),
     );
   }
@@ -408,7 +461,7 @@ class _MyBar extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF2C1A0E), Color(0xFF4A3020)],
-            begin: Alignment.centerLeft, end: Alignment.centerRight,
+            begin: Alignment.centerRight, end: Alignment.centerLeft,
           ),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [BoxShadow(
@@ -417,6 +470,21 @@ class _MyBar extends StatelessWidget {
           )],
         ),
         child: Row(children: [
+          // الاسم والنصيحة — يمين
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              const SizedBox(height: 3),
+              Text(tip, textAlign: TextAlign.start,
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11, height: 1.3)),
+            ],
+          )),
+          const SizedBox(width: 12),
+          ClipOval(child: FacelessAvatar(index: avIdx, size: 42)),
+          const SizedBox(width: 12),
+          // الترتيب — يسار
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -426,19 +494,6 @@ class _MyBar extends StatelessWidget {
             child: Text('#$rank',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
           ),
-          const SizedBox(width: 12),
-          ClipOval(child: FacelessAvatar(index: avIdx, size: 42)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 3),
-              Text(tip, textAlign: TextAlign.right,
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11, height: 1.3)),
-            ],
-          )),
         ]),
       ),
     );

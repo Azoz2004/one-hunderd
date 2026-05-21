@@ -527,7 +527,7 @@ class _TopBar extends StatelessWidget {
                       Icon(Icons.flag_rounded, color: Colors.white, size: 14),
                       SizedBox(width: 4),
                       Text(
-                        'Pending Quest',
+                        'مهمة معلقة',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -579,7 +579,7 @@ class _TopBar extends StatelessWidget {
           },
           icon: const Icon(Icons.logout_rounded, size: 20),
           style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary),
-          tooltip: 'Sign out',
+          tooltip: 'تسجيل الخروج',
         ),
       ],
     );
@@ -640,7 +640,7 @@ class _HouseCard extends StatelessWidget {
                             children: [
                               const Text('🎯 ', style: TextStyle(fontSize: 14)),
                               Text(
-                                'Save for',
+                                'الهدف المالي',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(fontWeight: FontWeight.w600),
                               ),
@@ -660,7 +660,7 @@ class _HouseCard extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              '${_formatNumber(user.financialGoal)} JOD',
+                              '${_formatNumber(user.financialGoal)} JD',
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
@@ -685,13 +685,13 @@ class _HouseCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Saved so far',
+                            'المبلغ المدخر',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${provider.totalSaved.toStringAsFixed(0)} JOD',
+                            '${provider.totalSaved.toStringAsFixed(0)} JD',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -809,19 +809,19 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       children: [
         _StatBox(
-          label: 'Days',
+          label: 'الأيام',
           value: '${provider.completedDays}/100',
           icon: Icons.calendar_today_outlined,
         ),
         const SizedBox(width: 8),
         _StatBox(
-          label: 'Deposits',
+          label: 'العمليات',
           value: '${provider.deposits.length}',
           icon: Icons.receipt_long_outlined,
         ),
         const SizedBox(width: 8),
         _StatBox(
-          label: 'Remaining',
+          label: 'المتبقي',
           value: '${provider.remainingDays}',
           icon: Icons.hourglass_empty_rounded,
         ),

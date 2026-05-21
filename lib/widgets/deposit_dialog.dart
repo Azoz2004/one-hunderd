@@ -34,7 +34,7 @@ class _DepositDialogState extends State<DepositDialog> {
   void initState() {
     super.initState();
     final provider = context.read<SavingsProvider>();
-    // Suggest the next day's expected amount (day N = N JOD)
+    // Suggest the next day's expected amount (day N = N JD)
     final nextGridDay = provider.completedDays + 1;
     if (nextGridDay <= 100 && !provider.hasTodayDeposit) {
       _amountController.text = nextGridDay.toString();
@@ -55,10 +55,24 @@ class _DepositDialogState extends State<DepositDialog> {
     final notes = _notesController.text.trim();
     final provider = context.read<SavingsProvider>();
 
-    await provider.logDeposit(
-      amount: amount,
-      notes: notes.isEmpty ? null : notes,
-    );
+    try {
+      await provider.logDeposit(
+        amount: amount,
+        notes: notes.isEmpty ? null : notes,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
 
     // Capture updated state BEFORE closing
     final updatedDays = provider.completedDays;
@@ -113,15 +127,17 @@ class _DepositDialogState extends State<DepositDialog> {
               ),
               const SizedBox(height: 20),
         
-              // Title
+              // العنوان
               Text(
-                'Log Deposit',
+                'تسجيل إيداع',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 4),
               if (todayDeposits.isNotEmpty)
                 Text(
-                  '${todayDeposits.length} deposit${todayDeposits.length > 1 ? 's' : ''} today — ${provider.todayTotal.toStringAsFixed(1)} JOD',
+                  todayDeposits.length == 1
+                      ? 'إيداع واحد اليوم — ${provider.todayTotal.toStringAsFixed(1)} JD'
+                      : '${todayDeposits.length} إيداعات اليوم — ${provider.todayTotal.toStringAsFixed(1)} JD',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.green,
                         fontWeight: FontWeight.w500,
@@ -129,54 +145,55 @@ class _DepositDialogState extends State<DepositDialog> {
                 )
               else
                 Text(
-                  'Day ${provider.completedDays + 1} of 100',
+                  'اليوم ${provider.completedDays + 1} من 100',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               const SizedBox(height: 24),
         
-              // Amount field
+              // حقل المبلغ
               TextFormField(
                 controller: _amountController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 autofocus: true,
                 decoration: const InputDecoration(
-                  labelText: 'Amount (JOD)',
+                  labelText: 'المبلغ (JD)',
                   prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter an amount';
+                    return 'الرجاء إدخال المبلغ';
                   }
                   final n = double.tryParse(value.trim());
                   if (n == null || n <= 0) {
-                    return 'Enter a valid positive amount';
+                    return 'أدخل مبلغاً صحيحاً أكبر من صفر';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
         
-              // Notes field
+              // حقل الملاحظات
               TextFormField(
                 controller: _notesController,
                 maxLines: 2,
+                textDirection: TextDirection.rtl,
                 decoration: const InputDecoration(
-                  labelText: 'Notes (optional)',
+                  labelText: 'ملاحظات (اختياري)',
                   prefixIcon: Icon(Icons.note_outlined),
                   alignLabelWithHint: true,
                 ),
               ),
               const SizedBox(height: 24),
         
-              // Save button
+              // زر الحفظ
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: provider.isComplete ? null : _save,
                   icon: const Icon(Icons.check_rounded, size: 20),
                   label: Text(
-                    provider.isComplete ? 'Challenge Complete!' : 'Save Deposit',
+                    provider.isComplete ? 'أحسنت! أتممت التحدي 🏆' : 'تسجيل الإيداع',
                   ),
                 ),
               ),

@@ -796,12 +796,12 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
                     child: Column(
                       children: [
                         const Text(
-                          'المبلغ المُدّخر حتى الآن',
+                          'المبلغ المدخر',
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${totalSaved.toStringAsFixed(1)} JOD',
+                          '${totalSaved.toStringAsFixed(1)} JD',
                           style: const TextStyle(color: AppColors.green, fontSize: 32, fontWeight: FontWeight.w800),
                         ),
                       ],
@@ -836,7 +836,7 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
       final xfile = XFile(file.path);
       final ShareResult result = await Share.shareXFiles(
         [xfile],
-        text: 'لقد حققت إنجازاً جديداً في تحدي المئة يوم! 🎉\nوصلت إلى اليوم ${widget.day} وادخرت ${totalSaved.toStringAsFixed(1)} JOD.\nهل أنت جاهز للتحدي؟ #تحدي_المئة_يوم',
+        text: 'لقد حققت إنجازاً جديداً في تحدي المئة يوم! 🎉\nوصلت إلى اليوم ${widget.day} وادخرت ${totalSaved.toStringAsFixed(1)} JD.\nهل أنت جاهز للتحدي؟ #تحدي_المئة_يوم',
       );
 
       if (!mounted) return;

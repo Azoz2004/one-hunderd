@@ -3,7 +3,7 @@ class UserProfile {
   final String fullName;
   final String gender;
   final String contact; // Email address or Jordanian phone number
-  double financialGoal; // Target amount in JOD
+  double financialGoal; // Target amount in JD
 
   /// الحالة الاجتماعية: 'شاب' | 'شابة' | 'متزوج' | 'متزوجة'
   final String maritalStatus;

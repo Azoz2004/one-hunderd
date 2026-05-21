@@ -47,7 +47,7 @@ class StreakCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '🔥  Day Streak',
+                  '🔥  سلسلة الالتزام',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -55,8 +55,8 @@ class StreakCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   streak == 0
-                      ? 'Make your first deposit today!'
-                      : 'Keep it going!',
+                      ? 'سجّل إيداعك الأول اليوم!'
+                      : 'رائع! واصل الالتزام 💪',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -76,7 +76,7 @@ class StreakCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '✓ Today',
+                    '✓ اليوم',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.green,
                           fontWeight: FontWeight.w600,

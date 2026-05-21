@@ -204,10 +204,17 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   void _signInWithGoogle() {
-    context.read<SavingsProvider>().signInWithGoogle();
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+    // Google Sign-In سيتم تفعيله لاحقاً
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('تسجيل الدخول بـ Google سيتوفر قريباً ✨',
+            textDirection: TextDirection.rtl),
+        backgroundColor: AppColors.charcoal,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -489,20 +496,41 @@ class _Step1InfoPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // ── Google Sign-In
-            SizedBox(
-              height: 54,
-              child: OutlinedButton.icon(
-                onPressed: onGoogleSignIn,
-                icon: const Text(
-                  'G',
-                  style: TextStyle(
-                    color: AppColors.googleBlue,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
+            // ── Google Sign-In (قريباً)
+            Opacity(
+              opacity: 0.55,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  SizedBox(
+                    height: 54,
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: onGoogleSignIn,
+                      icon: const Text(
+                        'G',
+                        style: TextStyle(
+                          color: AppColors.googleBlue,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
+                      label: const Text('تسجيل الدخول بـ Google'),
+                    ),
                   ),
-                ),
-                label: const Text('تسجيل الدخول بـ Google'),
+                  Positioned(
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.charcoal,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('قريباً',
+                          style: TextStyle(color: AppColors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

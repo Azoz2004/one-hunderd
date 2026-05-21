@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/savings_provider.dart';
 import '../theme/app_theme.dart';
@@ -52,9 +51,23 @@ class DayCell extends StatelessWidget {
   void _showDetails(BuildContext context, SavingsProvider provider) {
     final deposits = provider.getDepositsForDay(dayNumber);
     final calendarDate = provider.getDateForDay(dayNumber);
-    final dateFormat = DateFormat('MMMM d, yyyy');
-    final timeFormat = DateFormat('h:mm a');
     final dayTotal = provider.totalForDay(dayNumber);
+
+    // تنسيق التاريخ بالعربية
+    String formatDate(DateTime d) {
+      const months = [
+        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+      ];
+      return '${d.day} ${months[d.month - 1]} ${d.year}';
+    }
+
+    String formatTime(DateTime d) {
+      final h = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
+      final m = d.minute.toString().padLeft(2, '0');
+      final period = d.hour >= 12 ? 'م' : 'ص';
+      return '$h:$m $period';
+    }
 
     showModalBottomSheet(
       context: context,
@@ -104,19 +117,19 @@ class DayCell extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Day $dayNumber',
+                      'اليوم $dayNumber',
                       style: Theme.of(ctx).textTheme.headlineMedium,
                     ),
                     if (calendarDate != null)
                       Text(
-                        dateFormat.format(calendarDate),
+                        formatDate(calendarDate),
                         style: Theme.of(ctx).textTheme.bodySmall,
                       ),
                   ],
                 ),
                 const Spacer(),
-                Text(
-                  '${dayTotal.toStringAsFixed(1)} JOD',
+                 Text(
+                  '${dayTotal.toStringAsFixed(1)} JD',
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.green,
@@ -126,9 +139,11 @@ class DayCell extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Deposits list
+            // قائمة الإيداعات
             Text(
-              '${deposits.length} deposit${deposits.length > 1 ? 's' : ''} this day',
+              deposits.length == 1
+                  ? 'عملية إدخار واحدة في هذا اليوم'
+                  : '${deposits.length} عمليات إدخار في هذا اليوم',
               style: Theme.of(ctx).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -150,7 +165,7 @@ class DayCell extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${dep.amount.toStringAsFixed(1)} JOD',
+                                '${dep.amount.toStringAsFixed(1)} JD',
                                 style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -165,7 +180,7 @@ class DayCell extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              timeFormat.format(dep.date),
+                              formatTime(dep.date),
                               style: Theme.of(ctx).textTheme.bodySmall,
                             ),
                           ],

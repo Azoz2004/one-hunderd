@@ -25,7 +25,7 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData get lightTheme {
-    final baseTextTheme = GoogleFonts.interTextTheme();
+    final baseTextTheme = GoogleFonts.tajawalTextTheme();
 
     return ThemeData(
       useMaterial3: true,
@@ -84,7 +84,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.tajawal(
           color: AppColors.charcoal,
           fontWeight: FontWeight.w700,
           fontSize: 20,
@@ -101,7 +101,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.tajawal(
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -116,7 +116,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.tajawal(
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -142,8 +142,8 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
-        labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
+        hintStyle: GoogleFonts.tajawal(color: AppColors.textSecondary, fontSize: 16),
+        labelStyle: GoogleFonts.tajawal(color: AppColors.textSecondary, fontSize: 16),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.green,
