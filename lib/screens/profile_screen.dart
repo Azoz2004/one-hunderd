@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../providers/savings_provider.dart';
+import '../models/user_profile.dart';
 
 // ─── Faceless Avatar Styles ───────────────────────────────────────────────────
 const _avatarBgColors = [
@@ -173,6 +176,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           currentIndex: currentIdx,
           onPick: (idx) async {
             Navigator.pop(ctx);
+            // Update local provider so the Drawer updates instantly
+            context.read<SavingsProvider>().updateAvatarIndex(idx);
             await _updateFirestore({'avatarIndex': idx});
           },
         ),
@@ -199,6 +204,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ..['fullName'] = name
                 ..['contact'] = contact
                 ..['birthDate'] = bDate;
+              
+              // Update local provider so name changes refresh instantly
+              final newProfile = UserProfile.fromJson(updated);
+              context.read<SavingsProvider>().updateProfile(newProfile);
+
               await _updateFirestore({'user_profile_v1': updated});
               if (ctx.mounted) Navigator.pop(ctx);
             },

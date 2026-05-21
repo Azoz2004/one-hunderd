@@ -31,6 +31,7 @@ class SavingsProvider extends ChangeNotifier {
   int _adsWatchedToday = 0;
   int _sharesDoneToday = 0;
   String? _currentDateStr;
+  int _avatarIndex = 0;
 
   // ── Getters ──────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ class SavingsProvider extends ChangeNotifier {
   String? get lastDailyClaimDate => _lastDailyClaimDate;
   int get adsWatchedToday => _adsWatchedToday;
   int get sharesDoneToday => _sharesDoneToday;
+  int get avatarIndex => _avatarIndex;
 
   /// Whether the streak is broken (missed more than 1 day)
   bool get isStreakBroken {
@@ -209,6 +211,7 @@ class SavingsProvider extends ChangeNotifier {
     _adsWatchedToday = data['ads_watched_v1'] as int? ?? 0;
     _sharesDoneToday = data['shares_done_v1'] as int? ?? 0;
     _currentDateStr = data['current_date_str_v1'] as String?;
+    _avatarIndex = data['avatarIndex'] as int? ?? 0;
     
     checkAndResetDailyCounters();
 
@@ -265,6 +268,7 @@ class SavingsProvider extends ChangeNotifier {
       'ads_watched_v1': _adsWatchedToday,
       'shares_done_v1': _sharesDoneToday,
       'current_date_str_v1': _currentDateStr ?? FieldValue.delete(),
+      'avatarIndex': _avatarIndex,
       // ─ حقل لتمكين الفرز في لوحة الصدارة من طرف الخادم مباشرة ─
       'completed_days_count': completedDays,
       // ─ علامة الإتمام لتبويب نادي المئة ─
@@ -520,6 +524,18 @@ class SavingsProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateAvatarIndex(int index) async {
+    _avatarIndex = index;
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> updateProfile(UserProfile profile) async {
+    _userProfile = profile;
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> signOut() async {
     _userProfile = null;
     _deposits.clear();
@@ -532,6 +548,7 @@ class SavingsProvider extends ChangeNotifier {
     _sharesDoneToday = 0;
     _currentDateStr = null;
     _completedAt = null;
+    _avatarIndex = 0;
     notifyListeners();
     await FirebaseAuth.instance.signOut();
   }
@@ -558,6 +575,7 @@ class SavingsProvider extends ChangeNotifier {
     _lifebuoys = 0;
     _lastDepositDate = null;
     _completedAt = null;
+    _avatarIndex = 0;
     notifyListeners();
     await _persist();
     final prefs = await SharedPreferences.getInstance();

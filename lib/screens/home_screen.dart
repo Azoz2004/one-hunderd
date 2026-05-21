@@ -405,10 +405,64 @@ class _AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: AppColors.background,
+      width: MediaQuery.of(context).size.width * 0.5,
       child: Column(
         children: [
-          // Top safe area padding only
+          // Top safe area padding
           const SafeArea(bottom: false, child: SizedBox.shrink()),
+          
+          // User Card (Avatar + Full Name)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardFill,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Row(
+              children: [
+                ClipOval(
+                  child: FacelessAvatar(
+                    index: provider.avatarIndex,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        provider.userProfile?.fullName ?? 'مستخدم',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: AppColors.charcoal,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'مرحباً بك!',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: AppColors.borderLight, height: 1),
+          const SizedBox(height: 8),
+
           // Menu Items
           _DrawerItem(
             icon: Icons.person_outline_rounded,
@@ -426,6 +480,54 @@ class _AppDrawer extends StatelessWidget {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
             },
           ),
+          
+          // New Placeholder items
+          _DrawerItem(
+            icon: Icons.people_outline_rounded,
+            label: 'الأصدقاء',
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('ميزة الأصدقاء قادمة قريباً! 👥', textDirection: TextDirection.rtl),
+                  backgroundColor: AppColors.charcoal,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+          ),
+          _DrawerItem(
+            icon: Icons.storefront_outlined,
+            label: 'المتجر',
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('ميزة المتجر قادمة قريباً! 🛒', textDirection: TextDirection.rtl),
+                  backgroundColor: AppColors.charcoal,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+          ),
+          _DrawerItem(
+            icon: Icons.forest_outlined,
+            label: 'الغابة الحقيقية',
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('ميزة الغابة الحقيقية قادمة قريباً! 🌲', textDirection: TextDirection.rtl),
+                  backgroundColor: AppColors.charcoal,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+          ),
+
           const Spacer(),
           const Divider(color: AppColors.borderLight, height: 1),
           _DrawerItem(
@@ -456,11 +558,18 @@ class _DrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-    leading: Icon(icon, color: color, size: 22),
-    title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 15)),
+    leading: Icon(icon, color: color, size: 20),
+    title: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+    ),
     onTap: onTap,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+    horizontalTitleGap: 8,
+    minLeadingWidth: 20,
   );
 }
 
