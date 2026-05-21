@@ -66,6 +66,7 @@ class _LS extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
             child: Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               height: 40,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: AppColors.cardFill,
                 borderRadius: BorderRadius.circular(12),
@@ -76,12 +77,13 @@ class _LS extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
                 labelColor: AppColors.white,
                 unselectedLabelColor: AppColors.textSecondary,
                 dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
                   gradient: const LinearGradient(colors: [AppColors.charcoal, Color(0xFF4A3828)]),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10),
-                padding: const EdgeInsets.all(3),
+                padding: EdgeInsets.zero,
                 tabs: const [
                   Tab(text: 'الالتزام'),
                   Tab(text: 'الساعون للمئة'),

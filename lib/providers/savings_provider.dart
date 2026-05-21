@@ -1,10 +1,13 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/deposit.dart';
 import '../models/user_profile.dart';
+import '../services/notification_service.dart';
+
 
 // ─── SharedPrefs keys ─────────────────────────────────────────────────────────
 const _kUserProfile = 'user_profile_v1';
@@ -32,6 +35,11 @@ class SavingsProvider extends ChangeNotifier {
   int _sharesDoneToday = 0;
   String? _currentDateStr;
   int _avatarIndex = 0;
+
+  StreamSubscription<QuerySnapshot>? _incomingRequestsSubscription;
+  StreamSubscription<QuerySnapshot>? _acceptedRequestsSubscription;
+  final DateTime _appStartTime = DateTime.now();
+  final Set<String> _notifiedAcceptedRequestIds = {};
 
   // ── Getters ──────────────────────────────────────────────────────────────
 
@@ -125,7 +133,7 @@ class SavingsProvider extends ChangeNotifier {
   bool get isComplete => completedDays >= 100;
 
   /// Total amount saved across all deposits.
-  double get totalSaved => _deposits.fold(0.0, (sum, d) => sum + d.amount);
+  double get totalSaved => _deposits.fold(0.0, (t, d) => t + d.amount);
 
   int get remainingDays => 100 - completedDays;
   double get progress => completedDays / 100;
@@ -163,15 +171,32 @@ class SavingsProvider extends ChangeNotifier {
   Future<void> init() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    _startFriendsListeners(user.uid);
 
     final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final docSnap = await docRef.get();
     final data = docSnap.data() ?? <String, dynamic>{};
 
+    // هجرة ذاتية: إضافة حقل createdAt في Firestore في حال عدم وجوده
+    if (!data.containsKey('createdAt')) {
+      final creationTime = user.metadata.creationTime ?? DateTime.now();
+      await docRef.set({
+        'createdAt': Timestamp.fromDate(creationTime),
+      }, SetOptions(merge: true));
+      data['createdAt'] = Timestamp.fromDate(creationTime);
+    }
+
     // Load user profile
+    bool needsMigration = false;
     if (data.containsKey(_kUserProfile) && data[_kUserProfile] != null) {
       try {
-        _userProfile = UserProfile.fromJson(data[_kUserProfile] as Map<String, dynamic>);
+        final profileMap = data[_kUserProfile] as Map<String, dynamic>;
+        _userProfile = UserProfile.fromJson(profileMap);
+        
+        // If lower fields are missing in Firestore for this profile, trigger migration
+        if (!profileMap.containsKey('fullName_lower') || !profileMap.containsKey('contact_lower')) {
+          needsMigration = true;
+        }
       } catch (_) {
         _userProfile = null;
       }
@@ -188,8 +213,13 @@ class SavingsProvider extends ChangeNotifier {
         goal: 'توفير',
         challengeType: 'فردي',
       );
-      // Try to save this default profile back to Firestore asynchronously
-      _persist().catchError((_) {});
+      needsMigration = true;
+    }
+
+    if (needsMigration) {
+      _persist().catchError((e) {
+        debugPrint('Auto-migration/Persist failed: $e');
+      });
     }
 
     // Load streak and lifebuoys
@@ -257,8 +287,19 @@ class SavingsProvider extends ChangeNotifier {
       _completedAt = null;
     }
 
+    // ── إنشاء نسخة الملف الشخصي مع حقول البحث ──────────────────────────────
+    Map<String, dynamic>? profileData;
+    if (_userProfile != null) {
+      profileData = _userProfile!.toJson();
+      // حقول lowercase للبحث الفعّال server-side
+      profileData['fullName_lower'] =
+          (_userProfile!.fullName).toLowerCase().trim();
+      profileData['contact_lower'] =
+          (_userProfile!.contact).toLowerCase().trim();
+    }
+
     final updateData = <String, dynamic>{
-      _kUserProfile: _userProfile != null ? _userProfile!.toJson() : FieldValue.delete(),
+      _kUserProfile: profileData ?? FieldValue.delete(),
       _kDeposits: _deposits.map((d) => d.toJson()).toList(),
       'current_streak_v1': _currentStreak,
       'lifebuoys_v1': _lifebuoys,
@@ -537,6 +578,7 @@ class SavingsProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _cancelFriendsListeners();
     _userProfile = null;
     _deposits.clear();
     _currentStreak = 0;
@@ -604,5 +646,84 @@ class SavingsProvider extends ChangeNotifier {
     _lastDailyClaimDate = null;
     notifyListeners();
     await _persist();
+  }
+
+  void _startFriendsListeners(String myUid) {
+    _incomingRequestsSubscription?.cancel();
+    _acceptedRequestsSubscription?.cancel();
+
+    // 1. Listen for new pending incoming requests
+    _incomingRequestsSubscription = FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('toUid', isEqualTo: myUid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snap) async {
+      for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data();
+          if (data == null) continue;
+          final createdAt = data['createdAt'] as Timestamp?;
+          // Only show notification for requests created AFTER the app started
+          if (createdAt != null && createdAt.toDate().isAfter(_appStartTime)) {
+            final senderName = data['senderName'] as String? ?? 'مستخدم';
+            await NotificationService().showInstantNotification(
+              'طلب صداقة جديد! 👤',
+              'أرسل لك $senderName طلب صداقة.',
+            );
+          }
+        }
+      }
+    });
+
+    // 2. Listen for outgoing requests that get accepted
+    bool isFirstSnapshot = true;
+    _acceptedRequestsSubscription = FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('fromUid', isEqualTo: myUid)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots()
+        .listen((snap) async {
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        return;
+      }
+
+      for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
+          final data = change.doc.data();
+          if (data == null) continue;
+
+          final toUid = data['toUid'] as String?;
+          if (toUid == null) continue;
+
+          final reqId = change.doc.id;
+          if (_notifiedAcceptedRequestIds.contains(reqId)) continue;
+          _notifiedAcceptedRequestIds.add(reqId);
+
+          // Fetch receiver's name
+          final userSnap = await FirebaseFirestore.instance.collection('users').doc(toUid).get();
+          String receiverName = 'صديق';
+          if (userSnap.exists) {
+            final profile = userSnap.data()?['user_profile_v1'] as Map<String, dynamic>? ?? {};
+            receiverName = profile['fullName'] as String? ?? 'صديق';
+          }
+
+          // Trigger local notification
+          await NotificationService().showInstantNotification(
+            'تم قبول طلب الصداقة! 🎉',
+            'قبل $receiverName طلب الصداقة الخاص بك.',
+          );
+        }
+      }
+    });
+  }
+
+  void _cancelFriendsListeners() {
+    _incomingRequestsSubscription?.cancel();
+    _incomingRequestsSubscription = null;
+    _acceptedRequestsSubscription?.cancel();
+    _acceptedRequestsSubscription = null;
+    _notifiedAcceptedRequestIds.clear();
   }
 }

@@ -11,6 +11,7 @@ import '../services/notification_service.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
 import 'leaderboard_screen.dart';
+import 'friends_screen.dart';
 
 /// Home screen designed to mirror the physical sticker layout:
 /// a house-shaped card with the 100-day grid inside, decorative
@@ -406,144 +407,140 @@ class _AppDrawer extends StatelessWidget {
     return Drawer(
       backgroundColor: AppColors.background,
       width: MediaQuery.of(context).size.width * 0.5,
-      child: Column(
-        children: [
-          // Top safe area padding
-          const SafeArea(bottom: false, child: SizedBox.shrink()),
-          
-          // User Card (Avatar + Full Name)
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.cardFill,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderLight),
-            ),
-            child: Row(
-              children: [
-                ClipOval(
-                  child: FacelessAvatar(
-                    index: provider.avatarIndex,
-                    size: 38,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        provider.userProfile?.fullName ?? 'مستخدم',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          color: AppColors.charcoal,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    // User Card (Avatar + Full Name)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardFill,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.borderLight),
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'مرحباً بك!',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 10,
-                        ),
+                      child: Row(
+                        children: [
+                          ClipOval(
+                            child: FacelessAvatar(
+                              index: provider.avatarIndex,
+                              size: 38,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  provider.userProfile?.fullName ?? 'مستخدم',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    color: AppColors.charcoal,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'مرحباً بك!',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const Divider(color: AppColors.borderLight, height: 1),
+                    const SizedBox(height: 8),
+
+                    // Menu Items
+                    _DrawerItem(
+                      icon: Icons.person_outline_rounded,
+                      label: 'الملف الشخصي',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                      },
+                    ),
+                    _DrawerItem(
+                      icon: Icons.emoji_events_rounded,
+                      label: 'لوحة الصدارة',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
+                      },
+                    ),
+                    _DrawerItem(
+                      icon: Icons.people_outline_rounded,
+                      label: 'الأصدقاء',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()));
+                      },
+                    ),
+                    _DrawerItem(
+                      icon: Icons.storefront_outlined,
+                      label: 'المتجر',
+                      onTap: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('ميزة المتجر قادمة قريباً! 🛒', textDirection: TextDirection.rtl),
+                            backgroundColor: AppColors.charcoal,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      },
+                    ),
+                    _DrawerItem(
+                      icon: Icons.forest_outlined,
+                      label: 'الغابة الحقيقية',
+                      onTap: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('ميزة الغابة الحقيقية قادمة قريباً! 🌲', textDirection: TextDirection.rtl),
+                            backgroundColor: AppColors.charcoal,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-          const Divider(color: AppColors.borderLight, height: 1),
-          const SizedBox(height: 8),
-
-          // Menu Items
-          _DrawerItem(
-            icon: Icons.person_outline_rounded,
-            label: 'الملف الشخصي',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.emoji_events_rounded,
-            label: 'لوحة الصدارة',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
-            },
-          ),
-          
-          // New Placeholder items
-          _DrawerItem(
-            icon: Icons.people_outline_rounded,
-            label: 'الأصدقاء',
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('ميزة الأصدقاء قادمة قريباً! 👥', textDirection: TextDirection.rtl),
-                  backgroundColor: AppColors.charcoal,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.storefront_outlined,
-            label: 'المتجر',
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('ميزة المتجر قادمة قريباً! 🛒', textDirection: TextDirection.rtl),
-                  backgroundColor: AppColors.charcoal,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.forest_outlined,
-            label: 'الغابة الحقيقية',
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('ميزة الغابة الحقيقية قادمة قريباً! 🌲', textDirection: TextDirection.rtl),
-                  backgroundColor: AppColors.charcoal,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-          ),
-
-          const Spacer(),
-          const Divider(color: AppColors.borderLight, height: 1),
-          _DrawerItem(
-            icon: Icons.logout_rounded,
-            label: 'تسجيل الخروج',
-            color: AppColors.error,
-            onTap: () {
-              Navigator.pop(context);
-              provider.signOut();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const AuthScreen()),
-              );
-            },
-          ),
-          const SafeArea(top: false, child: SizedBox.shrink()),
-        ],
+            const Divider(color: AppColors.borderLight, height: 1),
+            _DrawerItem(
+              icon: Icons.logout_rounded,
+              label: 'تسجيل الخروج',
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                provider.signOut();
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

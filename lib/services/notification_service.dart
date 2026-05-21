@@ -167,4 +167,23 @@ class NotificationService {
 
     );
   }
+
+  /// 6. Show Instant Notification
+  Future<void> showInstantNotification(String title, String body) async {
+    await init(); // Ensure initialized
+    const androidDetails = AndroidNotificationDetails(
+      'friends_channel',
+      'إشعارات الأصدقاء',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+    await _flutterLocalNotificationsPlugin.show(
+      id: Random().nextInt(10000) + 100,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(android: androidDetails),
+    );
+  }
 }
