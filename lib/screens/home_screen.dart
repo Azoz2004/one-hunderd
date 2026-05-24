@@ -533,9 +533,116 @@ class _AppDrawer extends StatelessWidget {
               color: AppColors.error,
               onTap: () {
                 Navigator.pop(context);
-                provider.signOut();
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                showDialog(
+                  context: context,
+                  barrierDismissible: true,
+                  builder: (BuildContext context) {
+                    return Dialog(
+                      backgroundColor: AppColors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.logout_rounded,
+                                color: AppColors.error,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            const Text(
+                              'تسجيل الخروج',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.charcoal,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم حفظ جميع بياناتك وتقدمك السحابي بأمان.',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                height: 1.5,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      side: const BorderSide(color: AppColors.borderLight, width: 1.5),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text(
+                                      'إلغاء',
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: AppColors.charcoal,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.error,
+                                      foregroundColor: AppColors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      provider.signOut();
+                                      Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute(builder: (_) => const AuthScreen()),
+                                      );
+                                    },
+                                    child: const Text(
+                                      'خروج',
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -674,18 +781,6 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-        ),
-
-        IconButton(
-          onPressed: () {
-            provider.signOut();
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const AuthScreen()),
-            );
-          },
-          icon: const Icon(Icons.logout_rounded, size: 20),
-          style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary),
-          tooltip: 'تسجيل الخروج',
         ),
       ],
     );

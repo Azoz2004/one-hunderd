@@ -144,7 +144,7 @@ class FriendsService {
           .where('users', arrayContains: _myUid)
           .get();
 
-      final List<FriendUser> friends = [];
+      final List<String> friendUids = [];
       for (final doc in snap.docs) {
         try {
           final data = doc.data();
@@ -152,16 +152,35 @@ class FriendsService {
           if (usersList == null) continue;
           final users = List<String>.from(usersList);
           final friendUid = users.firstWhere((u) => u != _myUid, orElse: () => '');
-          if (friendUid.isEmpty) continue;
-
-          final userDoc = await _db.collection('users').doc(friendUid).get();
-          if (!userDoc.exists) continue;
-          friends.add(FriendUser.fromFirestore(friendUid, userDoc.data()!));
+          if (friendUid.isNotEmpty) {
+            friendUids.add(friendUid);
+          }
         } catch (docErr) {
           debugPrint('Error parsing friendship doc ${doc.id}: $docErr');
-          continue; // تخطّ الوثيقة التالفة واستمر
         }
       }
+
+      if (friendUids.isEmpty) return [];
+
+      // جلب جميع وثائق الأصدقاء بالتوازي لضمان أقصى سرعة
+      final List<Future<DocumentSnapshot<Map<String, dynamic>>>> futures =
+          friendUids.map((uid) => _db.collection('users').doc(uid).get()).toList();
+
+      final results = await Future.wait(futures);
+
+      final List<FriendUser> friends = [];
+      for (var i = 0; i < results.length; i++) {
+        final docSnap = results[i];
+        final uid = friendUids[i];
+        if (docSnap.exists && docSnap.data() != null) {
+          try {
+            friends.add(FriendUser.fromFirestore(uid, docSnap.data()!));
+          } catch (parseErr) {
+            debugPrint('Error parsing user profile for $uid: $parseErr');
+          }
+        }
+      }
+
       return friends;
     } catch (e) {
       debugPrint('Error in getFriends: $e');
@@ -178,23 +197,44 @@ class FriendsService {
           .where('status', isEqualTo: 'pending')
           .get();
 
-      final List<Map<String, dynamic>> result = [];
+      final List<Map<String, dynamic>> pendingRequests = [];
       for (final doc in snap.docs) {
         try {
           final data = doc.data();
           final fromUid = data['fromUid'];
           if (fromUid == null || fromUid is! String || fromUid.isEmpty) continue;
-
-          final userDoc = await _db.collection('users').doc(fromUid).get();
-          if (!userDoc.exists) continue;
-          result.add({
+          pendingRequests.add({
             'requestId': doc.id,
             'createdAt': data['createdAt'],
-            'user': FriendUser.fromFirestore(fromUid, userDoc.data()!),
+            'fromUid': fromUid,
           });
         } catch (docErr) {
           debugPrint('Error parsing request doc ${doc.id}: $docErr');
-          continue;
+        }
+      }
+
+      if (pendingRequests.isEmpty) return [];
+
+      // جلب جميع وثائق مرسلي الطلبات بالتوازي لضمان أقصى سرعة
+      final List<Future<DocumentSnapshot<Map<String, dynamic>>>> futures =
+          pendingRequests.map((req) => _db.collection('users').doc(req['fromUid'] as String).get()).toList();
+
+      final results = await Future.wait(futures);
+
+      final List<Map<String, dynamic>> result = [];
+      for (var i = 0; i < results.length; i++) {
+        final docSnap = results[i];
+        final req = pendingRequests[i];
+        if (docSnap.exists && docSnap.data() != null) {
+          try {
+            result.add({
+              'requestId': req['requestId'],
+              'createdAt': req['createdAt'],
+              'user': FriendUser.fromFirestore(req['fromUid'] as String, docSnap.data()!),
+            });
+          } catch (parseErr) {
+            debugPrint('Error parsing user profile for incoming request: $parseErr');
+          }
         }
       }
 

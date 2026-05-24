@@ -388,7 +388,8 @@ class SavingsProvider extends ChangeNotifier {
     // 2. التحقق الأمامي (أونلاين): منع تقديم التاريخ المحلي عن وقت الشبكة
     final networkTime = await _getNetworkTime();
     if (networkTime != null) {
-      final networkOnly = DateTime(networkTime.year, networkTime.month, networkTime.day);
+      final networkLocal = networkTime.toLocal();
+      final networkOnly = DateTime(networkLocal.year, networkLocal.month, networkLocal.day);
       if (todayOnly.isAfter(networkOnly)) {
         throw Exception('تنبيه: تم الكشف عن تلاعب بالوقت! وقت هاتفك متقدم عن الوقت الحقيقي. يرجى ضبط وقت الهاتف على الوضع التلقائي.');
       }

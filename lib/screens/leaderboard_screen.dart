@@ -231,7 +231,8 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
         ),
       );
     }
-    if (_users.isEmpty) return Center(
+    if (_users.isEmpty) {
+      return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(widget.mode == _Mode.club ? Icons.lock_rounded : Icons.people_outline_rounded,
             size: 48, color: AppColors.borderLight),
@@ -243,6 +244,7 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
       ]),
     );
+    }
 
     final amIComplete = _myData != null && _isComplete(_myData!);
     final showLock  = widget.mode == _Mode.club && !amIComplete;
@@ -493,8 +495,10 @@ class _MyBar extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text('#$rank',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+            child: Text(
+              rank == -1 ? '100+' : '#$rank',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17),
+            ),
           ),
         ]),
       ),
