@@ -108,6 +108,59 @@ class _AvatarPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
+class LinkedAvatars extends StatelessWidget {
+  final int userAvatarIndex;
+  final int partnerAvatarIndex;
+  final double size;
+  final double overlapMultiplier;
+
+  const LinkedAvatars({
+    super.key,
+    required this.userAvatarIndex,
+    required this.partnerAvatarIndex,
+    this.size = 56,
+    this.overlapMultiplier = 0.6,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size + size * (1 - overlapMultiplier),
+      height: size,
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          Positioned(
+            left: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.cardFill, width: 2),
+              ),
+              child: ClipOval(
+                child: FacelessAvatar(index: partnerAvatarIndex, size: size),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.cardFill, width: 2.5),
+              ),
+              child: ClipOval(
+                child: FacelessAvatar(index: userAvatarIndex, size: size),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -248,6 +301,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final coins = _data?['wooden_coins_v1'] as int? ?? 0;
     final avatarIndex = _data?['avatarIndex'] as int? ?? 0;
     final progress = goal > 0 ? (totalSaved / goal).clamp(0.0, 1.0) : 0.0;
+    final provider = context.watch<SavingsProvider>();
+    final isCoop = provider.isCooperativeMode;
+    final partnerAvatar = provider.partnerAvatarIndex;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -284,6 +340,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 age: age,
                 avatarIndex: avatarIndex,
                 onAvatarTap: _showAvatarPicker,
+                isCooperativeMode: isCoop,
+                partnerAvatarIndex: partnerAvatar,
               ),
               const SizedBox(height: 16),
 
@@ -359,6 +417,8 @@ class ProfileHeader extends StatelessWidget {
   final String fullName, contact;
   final int age, avatarIndex;
   final VoidCallback onAvatarTap;
+  final bool isCooperativeMode;
+  final int? partnerAvatarIndex;
 
   const ProfileHeader({
     super.key,
@@ -367,6 +427,8 @@ class ProfileHeader extends StatelessWidget {
     required this.age,
     required this.avatarIndex,
     required this.onAvatarTap,
+    this.isCooperativeMode = false,
+    this.partnerAvatarIndex,
   });
 
   @override
@@ -385,7 +447,14 @@ class ProfileHeader extends StatelessWidget {
             onTap: onAvatarTap,
             child: Stack(
               children: [
-                ClipOval(child: FacelessAvatar(index: avatarIndex, size: 72)),
+                if (isCooperativeMode && partnerAvatarIndex != null)
+                  LinkedAvatars(
+                    userAvatarIndex: avatarIndex,
+                    partnerAvatarIndex: partnerAvatarIndex!,
+                    size: 72,
+                  )
+                else
+                  ClipOval(child: FacelessAvatar(index: avatarIndex, size: 72)),
                 Positioned(
                   right: 0, bottom: 0,
                   child: Container(
@@ -406,6 +475,17 @@ class ProfileHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (isCooperativeMode)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.charcoal.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.charcoal.withValues(alpha: 0.1)),
+                    ),
+                    child: const Text('التحدي التعاوني نشط 👥', style: TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w800)),
+                  ),
                 Text(fullName,
                   textAlign: TextAlign.right,
                   style: const TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w800, fontSize: 18),

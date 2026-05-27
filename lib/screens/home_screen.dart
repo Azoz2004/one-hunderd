@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../gamification/gamification_dialogs.dart';
 import '../providers/savings_provider.dart';
@@ -8,10 +11,13 @@ import '../widgets/deposit_dialog.dart';
 import '../widgets/savings_grid.dart';
 import '../widgets/streak_card.dart';
 import '../services/notification_service.dart';
+import '../services/challenge_service.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
 import 'leaderboard_screen.dart';
 import 'friends_screen.dart';
+import 'challenge_hub_screen.dart';
+import 'challenge_details_screen.dart';
 
 /// Home screen designed to mirror the physical sticker layout:
 /// a house-shaped card with the 100-day grid inside, decorative
@@ -25,6 +31,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasPendingQuest = false;
+  // Prevent duplicate separation dialogs from being shown
+  bool _hasSeparationDialogShown = false;
+  bool _hasDissolvedDialogShown = false;
+  bool _hasNewSessionDialogShown = false;
 
   @override
   void initState() {
@@ -35,13 +45,396 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _runGamification();
       final provider = context.read<SavingsProvider>();
       NotificationService().scheduleDailyNotifications(provider.completedDays);
+      // Attach separation state listener
+      provider.addListener(_onProviderChange);
     });
   }
 
   @override
   void dispose() {
+    // Remove separation listener
+    if (mounted) {
+      context.read<SavingsProvider>().removeListener(_onProviderChange);
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Called whenever the SavingsProvider notifies listeners.
+  /// Handles real-time separation request events.
+  void _onProviderChange() {
+    if (!mounted) return;
+    final provider = context.read<SavingsProvider>();
+
+    // ── Case 1: Partner received a separation request from us and dissolved the session
+    if (provider.isCooperativeMode &&
+        provider.isSessionDissolved &&
+        !_hasDissolvedDialogShown) {
+      _hasDissolvedDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showSessionDissolvedDialog();
+      });
+      return;
+    }
+
+    // ── Case 1.5: A new cooperative session started! (Receiver accepted)
+    if (provider.hasNewCooperativeSession && !_hasNewSessionDialogShown) {
+      _hasNewSessionDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showNewSessionStartedDialog();
+      });
+      return;
+    }
+
+    // ── Case 2: The partner wants to separate (we are the receiver)
+    if (provider.isCooperativeMode &&
+        provider.hasPartnerRequestedSeparation &&
+        !_hasSeparationDialogShown) {
+      _hasSeparationDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showPartnerRequestedSeparationDialog();
+      });
+      return;
+    }
+
+    // ── Reset flags when the separation request is cancelled/cleared
+    if (!provider.hasPartnerRequestedSeparation) {
+      _hasSeparationDialogShown = false;
+    }
+    if (!provider.isSessionDissolved) {
+      _hasDissolvedDialogShown = false;
+    }
+    if (!provider.hasNewCooperativeSession) {
+      _hasNewSessionDialogShown = false;
+    }
+  }
+
+  /// Shows a dialog when a new cooperative session is established.
+  void _showNewSessionStartedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFFE8F5E9),
+          title: const Row(
+            children: [
+              Icon(Icons.handshake_rounded, color: Color(0xFF2E7D32), size: 28),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'بدأ التحدي التعاوني!',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'تم قبول دعوة التحدي التعاوني بنجاح! سيتم إغلاق التطبيق الآن لتهيئة البيانات المشتركة مع شريكك بشكل سليم.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF2E7D32),
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                exit(0);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text(
+                'إغلاق التطبيق وبدء التحدي',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shows a dialog to the RECEIVING partner asking them to approve or reject.
+  void _showPartnerRequestedSeparationDialog() {
+    final provider = context.read<SavingsProvider>();
+    final partnerName = provider.partnerName ?? 'شريكك';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFFFFF8E1),
+          title: Row(
+            children: [
+              const Icon(Icons.link_off_rounded, color: Color(0xFFE65100), size: 28),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'طلب انفصال من شريكك',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: Color(0xFF4E342E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'طلب $partnerName الانفصال عن التحدي التعاوني المشترك والعودة إلى النظام الفردي.',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFF4E342E),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'إذا وافقت، سيحدث التالي:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: Color(0xFF6D4C41),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '• يحتفظ كل شريك بإيداعاته الفردية فقط.\n'
+                '• يُعاد حساب ستريك الالتزام لكل شريك بشكل منفصل.\n'
+                '• تُقسَّم المسكوكات وأطواق النجاة بالتساوي 50/50.\n'
+                '• يتحوّل نوع التحدي لكلا الطرفين إلى تحدٍّ فردي.\n'
+                '• سيتم إغلاق التطبيق لكلا الطرفين لتحديث البيانات.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6D4C41),
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            // Reject: continue the challenge
+            OutlinedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                _hasSeparationDialogShown = false;
+                try {
+                  await context.read<SavingsProvider>().rejectSeparation();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'رفضت طلب الانفصال. يستمر التحدي المشترك! 💪',
+                          textDirection: TextDirection.rtl,
+                        ),
+                        backgroundColor: const Color(0xFF4CAF50),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    );
+                  }
+                } catch (_) {}
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF4CAF50),
+                side: const BorderSide(color: Color(0xFF4CAF50), width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              ),
+              child: const Text(
+                'الاستمرار في التحدي 💪',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            // Approve: show second confirmation
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showApproveSeparationConfirmationDialog();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE65100),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              ),
+              child: const Text(
+                'الموافقة على الانفصال',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Double-confirmation before actually completing the separation (receiver side).
+  void _showApproveSeparationConfirmationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFFFFEBEE),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'تأكيد الموافقة النهائية',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: Color(0xFFB71C1C),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'هذا القرار لا يمكن التراجع عنه.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: Color(0xFFB71C1C),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'عند تأكيدك، سيتم تقسيم البيانات فوراً وسيُغلق التطبيق على جهازك وجهاز شريكك لإعادة تشغيل نظيف بالبيانات الفردية الجديدة.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFFC62828),
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                // Go back to show the first dialog again
+                _hasSeparationDialogShown = false;
+                _showPartnerRequestedSeparationDialog();
+              },
+              child: const Text(
+                'رجوع',
+                style: TextStyle(
+                  color: Color(0xFF757575),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final provider = context.read<SavingsProvider>();
+                Navigator.pop(ctx);
+                try {
+                  await provider.approveSeparation();
+                } catch (e) {
+                  debugPrint('approveSeparation error: $e');
+                }
+                // Always exit for a clean state reload
+                exit(0);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text(
+                'تأكيد الانفصال وإغلاق التطبيق',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shows a dialog to the INITIATOR when their partner has approved the dissolution.
+  void _showSessionDissolvedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: const Color(0xFFE8F5E9),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 28),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'تمت الموافقة على الانفصال',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'لقد وافق شريكك على الانفصال! تم تقسيم البيانات بنجاح. سيتم إغلاق التطبيق الآن لتحديث بياناتك الفردية بسلاسة.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF2E7D32),
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                exit(0);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text(
+                'إغلاق التطبيق وتحديث البيانات',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -178,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           Navigator.pop(ctx);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_insight_date');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowDailyInsight(context);
                         },
                       ),
@@ -192,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(7);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_quest_date');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowWeeklyQuest(context, 7);
                           _refreshPendingQuestBadge();
                         },
@@ -207,7 +600,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(14);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_quest_date');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowWeeklyQuest(context, 14);
                           _refreshPendingQuestBadge();
                         },
@@ -221,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(25);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowMilestone(context, 25);
                         },
                       ),
@@ -234,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(50);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowMilestone(context, 50);
                         },
                       ),
@@ -247,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(75);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowMilestone(context, 75);
                         },
                       ),
@@ -260,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           await provider.debugSetDays(100);
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('last_milestone_shown');
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           await checkAndShowMilestone(context, 100);
                         },
                       ),
@@ -398,12 +791,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── App Drawer ───────────────────────────────────────────────────────────────
-class _AppDrawer extends StatelessWidget {
+class _AppDrawer extends StatefulWidget {
   final SavingsProvider provider;
   const _AppDrawer({required this.provider});
 
   @override
+  State<_AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<_AppDrawer> {
+  StreamSubscription<int>? _challengeInvSub;
+  int _pendingChallengeCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _challengeInvSub = ChallengeService.incomingInvitationsCountStream().listen(
+      (count) {
+        if (mounted) setState(() => _pendingChallengeCount = count);
+      },
+      onError: (_) {},
+    );
+  }
+
+  @override
+  void dispose() {
+    _challengeInvSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final provider = widget.provider;
     return Drawer(
       backgroundColor: AppColors.background,
       width: MediaQuery.of(context).size.width * 0.5,
@@ -416,52 +835,82 @@ class _AppDrawer extends StatelessWidget {
                 child: Column(
                   children: [
                     // User Card (Avatar + Full Name)
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardFill,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.borderLight),
-                      ),
-                      child: Row(
-                        children: [
-                          ClipOval(
-                            child: FacelessAvatar(
-                              index: provider.avatarIndex,
-                              size: 38,
-                            ),
+                    GestureDetector(
+                      onTap: () {
+                        if (provider.isCooperativeMode) {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ChallengeDetailsScreen()),
+                          );
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: provider.isCooperativeMode 
+                              ? const Color(0xFF4CAF50).withValues(alpha: 0.07)
+                              : AppColors.cardFill,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: provider.isCooperativeMode 
+                                ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
+                                : AppColors.borderLight,
+                            width: provider.isCooperativeMode ? 1.5 : 1.0,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  provider.userProfile?.fullName ?? 'مستخدم',
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    color: AppColors.charcoal,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                        ),
+                        child: Row(
+                          children: [
+                            if (provider.isCooperativeMode)
+                              LinkedAvatars(
+                                userAvatarIndex: provider.avatarIndex,
+                                partnerAvatarIndex: provider.partnerAvatarIndex ?? 0,
+                                size: 36,
+                                overlapMultiplier: 0.5,
+                              )
+                            else
+                              ClipOval(
+                                child: FacelessAvatar(
+                                  index: provider.avatarIndex,
+                                  size: 38,
                                 ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'مرحباً بك!',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 10,
+                              ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    provider.isCooperativeMode
+                                        ? 'أنت 🤝 ${provider.partnerName ?? 'شريكك'}'
+                                        : (provider.userProfile?.fullName ?? 'مستخدم'),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(
+                                      color: AppColors.charcoal,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    provider.isCooperativeMode
+                                        ? 'التحدي التعاوني المشترك 👥'
+                                        : 'مرحباً بك!',
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const Divider(color: AppColors.borderLight, height: 1),
@@ -490,6 +939,16 @@ class _AppDrawer extends StatelessWidget {
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()));
+                      },
+                    ),
+                    // ── نظام التحدي (مع النقطة الحمراء) ──
+                    _DrawerItemWithBadge(
+                      icon: Icons.shield_rounded,
+                      label: 'نظام التحدي',
+                      badgeCount: _pendingChallengeCount,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ChallengeHubScreen()));
                       },
                     ),
                     _DrawerItem(
@@ -677,6 +1136,64 @@ class _DrawerItem extends StatelessWidget {
   );
 }
 
+/// عنصر Drawer مع نقطة حمراء (Badge) لعرض عدد الإشعارات
+class _DrawerItemWithBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int badgeCount;
+  final VoidCallback onTap;
+  const _DrawerItemWithBadge({
+    required this.icon,
+    required this.label,
+    required this.badgeCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: AppColors.charcoal, size: 20),
+        if (badgeCount > 0)
+          Positioned(
+            top: -5,
+            right: -5,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+    title: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w600, fontSize: 13),
+    ),
+    onTap: onTap,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+    horizontalTitleGap: 8,
+    minLeadingWidth: 20,
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Top Bar — hamburger + original layout
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -825,96 +1342,113 @@ class _HouseCard extends StatelessWidget {
                 children: [
                   // Left: Save for goal
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: AppColors.borderLight,
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Text('🎯 ', style: TextStyle(fontSize: 14)),
-                              Text(
-                                'الهدف المالي',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                    child: GestureDetector(
+                      onTap: () {
+                        if (provider.isCooperativeMode) {
+                          _showCooperativeGoalBottomSheet(context, user, provider);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: AppColors.borderLight,
+                            width: 1,
                           ),
-                          const SizedBox(height: 6),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.only(bottom: 4),
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.borderLight,
-                                  width: 1,
-                                  style: BorderStyle.solid,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text('🎯 ', style: TextStyle(fontSize: 14)),
+                                Text(
+                                  'الهدف المالي',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(bottom: 4),
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: AppColors.borderLight,
+                                    width: 1,
+                                    style: BorderStyle.solid,
+                                  ),
                                 ),
                               ),
+                              child: Text(
+                                '${_formatNumber(user.financialGoal)} JD',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
                             ),
-                            child: Text(
-                              '${_formatNumber(user.financialGoal)} JD',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   // Right: progress box
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: AppColors.borderLight,
-                          width: 1,
+                    child: GestureDetector(
+                      onTap: () {
+                        if (provider.isCooperativeMode) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ChallengeDetailsScreen()),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: AppColors.borderLight,
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'المبلغ المدخر',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${provider.totalSaved.toStringAsFixed(0)} JD',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.green,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'المبلغ المدخر',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${provider.totalSaved.toStringAsFixed(0)} JD',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.green,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: user.financialGoal > 0
+                                    ? (provider.totalSaved / user.financialGoal)
+                                          .clamp(0.0, 1.0)
+                                    : 0,
+                                minHeight: 4,
+                                backgroundColor: AppColors.borderLight,
+                                valueColor: const AlwaysStoppedAnimation(
+                                  AppColors.green,
                                 ),
-                          ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(
-                              value: user.financialGoal > 0
-                                  ? (provider.totalSaved / user.financialGoal)
-                                        .clamp(0.0, 1.0)
-                                  : 0,
-                              minHeight: 4,
-                              backgroundColor: AppColors.borderLight,
-                              valueColor: const AlwaysStoppedAnimation(
-                                AppColors.green,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1069,4 +1603,225 @@ class _StatBox extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Cooperative Goal Bottom Sheet ──────────────────────────────────────────
+void _showCooperativeGoalBottomSheet(BuildContext context, dynamic user, SavingsProvider provider) {
+  final myUid = FirebaseAuth.instance.currentUser?.uid;
+  final partnerUid = provider.partnerUid;
+  final partnerName = provider.partnerName ?? 'شريكك';
+  final myName = user.fullName ?? 'أنا';
+  final partnerAvatar = provider.partnerAvatarIndex ?? 0;
+  final myAvatar = provider.avatarIndex;
+
+  final deposits = provider.deposits;
+  double myContribution = 0.0;
+  double partnerContribution = 0.0;
+  for (final dep in deposits) {
+    if (dep.depositedBy == myUid) {
+      myContribution += dep.amount;
+    } else if (dep.depositedBy == partnerUid) {
+      partnerContribution += dep.amount;
+    }
+  }
+
+  final financialGoal = user.financialGoal;
+  final targetPerPerson = financialGoal / 2;
+
+  final myProgress = targetPerPerson > 0 ? (myContribution / targetPerPerson).clamp(0.0, 1.0) : 0.0;
+  final partnerProgress = targetPerPerson > 0 ? (partnerContribution / targetPerPerson).clamp(0.0, 1.0) : 0.0;
+
+  final myRemaining = (targetPerPerson - myContribution).clamp(0.0, double.infinity);
+  final partnerRemaining = (targetPerPerson - partnerContribution).clamp(0.0, double.infinity);
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: AppColors.background,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Handle indicator ──
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // ── Header ──
+              Row(
+                children: [
+                  const Text('🎯', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 10),
+                  Text(
+                    'تقسيم الهدف المالي المشترك',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.charcoal,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'الهدف المالي مقسم بالتساوي (50% لكل شريك) لتشجيع التعاون المالي والمساهمة المتكافئة.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Total Summary Card ──
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'الهدف الإجمالي للمجموعة',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${financialGoal.toStringAsFixed(0)} JD',
+                          style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 22, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          'المطلوب من كل فرد',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${targetPerPerson.toStringAsFixed(0)} JD',
+                          style: const TextStyle(color: AppColors.charcoal, fontSize: 20, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // ── My Section ──
+              _buildPartnerGoalProgress(
+                context: context,
+                name: 'أنت ($myName)',
+                avatarIndex: myAvatar,
+                saved: myContribution,
+                target: targetPerPerson,
+                remaining: myRemaining,
+                progress: myProgress,
+                isMe: true,
+              ),
+              const SizedBox(height: 20),
+
+              // ── Partner Section ──
+              _buildPartnerGoalProgress(
+                context: context,
+                name: partnerName,
+                avatarIndex: partnerAvatar,
+                saved: partnerContribution,
+                target: targetPerPerson,
+                remaining: partnerRemaining,
+                progress: partnerProgress,
+                isMe: false,
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildPartnerGoalProgress({
+  required BuildContext context,
+  required String name,
+  required int avatarIndex,
+  required double saved,
+  required double target,
+  required double remaining,
+  required double progress,
+  required bool isMe,
+}) {
+  final accentColor = isMe ? const Color(0xFF4CAF50) : const Color(0xFF388E3C);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          ClipOval(child: FacelessAvatar(index: avatarIndex, size: 36)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'المتبقي: ${remaining.toStringAsFixed(0)} JD',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${saved.toStringAsFixed(0)} / ${target.toStringAsFixed(0)} JD',
+                style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 14),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${(progress * 100).toStringAsFixed(0)}%',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: LinearProgressIndicator(
+          value: progress,
+          minHeight: 6,
+          backgroundColor: AppColors.borderLight,
+          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+        ),
+      ),
+    ],
+  );
 }

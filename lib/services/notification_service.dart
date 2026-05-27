@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -17,20 +18,34 @@ class NotificationService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    tz.initializeTimeZones();
-    final tzInfo = await FlutterTimezone.getLocalTimezone();
-    // In newer versions flutter_timezone might return a String or TimezoneInfo.
-    final String timeZoneName = tzInfo is String ? tzInfo : (tzInfo as dynamic).identifier;
-    tz.setLocalLocation(tz.getLocation(timeZoneName));
+    try {
+      tz.initializeTimeZones();
+      try {
+        final tzInfo = await FlutterTimezone.getLocalTimezone();
+        // In newer versions flutter_timezone might return a String or TimezoneInfo.
+        final String timeZoneName = tzInfo is String ? tzInfo : (tzInfo as dynamic).identifier;
+        tz.setLocalLocation(tz.getLocation(timeZoneName));
+      } catch (e) {
+        // Fallback to standard timezone if OS returns an unrecognized/non-IANA name (common on Windows)
+        try {
+          tz.setLocalLocation(tz.getLocation('Asia/Amman'));
+        } catch (_) {
+          tz.setLocalLocation(tz.UTC);
+        }
+      }
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher'); // Using default launcher icon
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher'); // Using default launcher icon
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
 
-    await _flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
-    _isInitialized = true;
+      await _flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
+      _isInitialized = true;
+    } catch (e) {
+      // Guard against any startup crashes on unsupported platforms (like Windows/Web development)
+      debugPrint('Warning: Notification Service failed to initialize: $e');
+    }
   }
 
   /// 1. Dynamic Daily Scheduling (Morning Habit & Escalation)

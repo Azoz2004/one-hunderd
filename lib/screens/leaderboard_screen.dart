@@ -123,6 +123,13 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
   @override bool get wantKeepAlive => true;
   @override void initState() { super.initState(); _fetch(); }
 
+  String _cleanName(String name) {
+    if (name.contains(' 🤝 ')) {
+      return name.split(' 🤝 ').first.trim();
+    }
+    return name.trim();
+  }
+
   int _days(Map<String, dynamic> u) {
     // نستخدم الحقل المحسوب أولاً (أسرع)، وإلا نحسبه من المصفوفة كـ fallback
     final cached = u['completed_days_count'] as int?;
@@ -178,14 +185,105 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
           users = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
       }
 
-      // ── إيجاد المستخدم الحالي ────────────────────────────────────────────
-      final myIdx = users.indexWhere((u) => u['id'] == widget.uid);
+      // ── دمج الشركاء التعاونيين في صف واحد لإزالة التكرار ──────────────────────────
+      final List<Map<String, dynamic>> mergedUsers = [];
+      final Set<String> processedSessionIds = {};
+
+      for (var u in users) {
+        final profile = u['user_profile_v1'] as Map<String, dynamic>? ?? {};
+        final isCoop = profile['challengeType'] == 'تعاوني' || u['activeSessionId'] != null;
+        final sessionId = u['activeSessionId'] as String?;
+
+        if (isCoop && sessionId != null) {
+          if (processedSessionIds.contains(sessionId)) {
+            // شريك تم دمجه بالفعل، تخطاه لمنع التكرار!
+            continue;
+          }
+          // أول شريك نلقاه: نقوم بتحديث اسمه ليصبح مدمجاً
+          processedSessionIds.add(sessionId);
+
+          // البحث عن اسم وصورة الشريك الحقيقيين ديناميكياً من القائمة
+          final partnerUid = u['cooperativePartnerUid'] as String?;
+          String partnerName = u['cooperativePartnerName'] as String? ?? 'شريك التحدي';
+          partnerName = _cleanName(partnerName);
+          int partnerAvIdx = (u['cooperativePartnerAvatarIndex'] as num?)?.toInt() ?? 0;
+          
+          if (partnerUid != null) {
+            final partnerDoc = users.firstWhere(
+              (otherUser) => otherUser['id'] == partnerUid,
+              orElse: () => <String, dynamic>{},
+            );
+            if (partnerDoc.isNotEmpty) {
+              final partnerProfile = partnerDoc['user_profile_v1'] as Map<String, dynamic>? ?? {};
+              final realName = partnerProfile['fullName'] as String?;
+              final realAvatar = partnerDoc['avatarIndex'] as int?;
+              if (realName != null && realName.isNotEmpty) {
+                partnerName = _cleanName(realName);
+              }
+              if (realAvatar != null) {
+                partnerAvIdx = realAvatar;
+              }
+            }
+          }
+
+          final myName = _cleanName(profile['fullName'] as String? ?? 'مستخدم');
+          
+          // تحديث الاسم والمعلومات المعروضة محلياً في القائمة
+          profile['fullName'] = '$myName 🤝 $partnerName';
+          u['user_profile_v1'] = profile;
+          u['cooperativePartnerName'] = partnerName;
+          u['cooperativePartnerAvatarIndex'] = partnerAvIdx;
+          mergedUsers.add(u);
+        } else {
+          mergedUsers.add(u);
+        }
+      }
+      users = mergedUsers;
+
+      // ── إيجاد المستخدم الحالي (أو شريكه لتمييز الصف المدمج كـ "أنا") ──────────────
+      final myIdx = users.indexWhere((u) => u['id'] == widget.uid || u['cooperativePartnerUid'] == widget.uid);
       Map<String, dynamic>? myData = myIdx >= 0 ? users[myIdx] : null;
 
       // إذا لم يكن ضمن الـ top 100 في هذا التبويب، نجلب بياناته منفردة للشريط السفلي
       if (myData == null && widget.uid.isNotEmpty) {
         final doc = await col.doc(widget.uid).get();
-        if (doc.exists) { myData = {'id': doc.id, ...doc.data()!}; }
+        if (doc.exists) { 
+          final map = {'id': doc.id, ...doc.data()!};
+          // إذا كان في تحدي تعاوني، ندمج اسم الشريك في الشريط السفلي أيضاً
+          final profile = map['user_profile_v1'] as Map<String, dynamic>? ?? {};
+          final isCoop = profile['challengeType'] == 'تعاوني' || map['activeSessionId'] != null;
+          if (isCoop) {
+            final partnerUid = map['cooperativePartnerUid'] as String?;
+            String partnerName = map['cooperativePartnerName'] as String? ?? 'شريك التحدي';
+            partnerName = _cleanName(partnerName);
+            int partnerAvIdx = (map['cooperativePartnerAvatarIndex'] as num?)?.toInt() ?? 0;
+            
+            if (partnerUid != null) {
+              final partnerDoc = users.firstWhere(
+                (otherUser) => otherUser['id'] == partnerUid,
+                orElse: () => <String, dynamic>{},
+              );
+              if (partnerDoc.isNotEmpty) {
+                final partnerProfile = partnerDoc['user_profile_v1'] as Map<String, dynamic>? ?? {};
+                final realName = partnerProfile['fullName'] as String?;
+                final realAvatar = partnerDoc['avatarIndex'] as int?;
+                if (realName != null && realName.isNotEmpty) {
+                  partnerName = _cleanName(realName);
+                }
+                if (realAvatar != null) {
+                  partnerAvIdx = realAvatar;
+                }
+              }
+            }
+
+            final myName = _cleanName(profile['fullName'] as String? ?? 'مستخدم');
+            profile['fullName'] = '$myName 🤝 $partnerName';
+            map['user_profile_v1'] = profile;
+            map['cooperativePartnerName'] = partnerName;
+            map['cooperativePartnerAvatarIndex'] = partnerAvIdx;
+          }
+          myData = map;
+        }
       }
 
       if (mounted) {
@@ -266,8 +364,9 @@ class _LTS extends State<_LeaderTab> with AutomaticKeepAliveClientMixin {
               rank: idx + 1,
               user: _users[idx],
               mode: widget.mode,
-              isMe: _users[idx]['id'] == widget.uid,
+              isMe: _users[idx]['id'] == widget.uid || _users[idx]['cooperativePartnerUid'] == widget.uid,
               days: _days(_users[idx]),
+              myUid: widget.uid,
             );
           },
         ),
@@ -326,15 +425,45 @@ class _LeaderItem extends StatelessWidget {
   final Map<String, dynamic> user;
   final _Mode mode;
   final bool isMe;
-  const _LeaderItem({required this.rank, required this.user, required this.mode,
-      required this.isMe, required this.days});
+  final String myUid;
+  const _LeaderItem({
+    required this.rank,
+    required this.user,
+    required this.mode,
+    required this.isMe,
+    required this.days,
+    required this.myUid,
+  });
 
   @override
   Widget build(BuildContext context) {
     final profile = user['user_profile_v1'] as Map<String, dynamic>? ?? {};
-    final name  = profile['fullName'] as String? ?? 'مستخدم';
     final avIdx = user['avatarIndex'] as int? ?? 0;
     final isTop = rank <= 3;
+    final bool isCoop = profile['challengeType'] == 'تعاوني' || user['activeSessionId'] != null;
+    final int partnerAvIdx = (user['cooperativePartnerAvatarIndex'] as num?)?.toInt() ?? 0;
+
+    String displayName = profile['fullName'] as String? ?? 'مستخدم';
+    int displayAvIdx = avIdx;
+    int displayPartnerAvIdx = partnerAvIdx;
+
+    if (isCoop && myUid.isNotEmpty) {
+      final partnerUid = user['cooperativePartnerUid'] as String?;
+      if (myUid == partnerUid) {
+        // Swap names so the logged-in partner sees their own name first
+        final rawName = profile['fullName'] as String? ?? 'مستخدم';
+        if (rawName.contains(' 🤝 ')) {
+          final parts = rawName.split(' 🤝 ');
+          if (parts.length == 2) {
+            displayName = '${parts[1]} 🤝 ${parts[0]}';
+          }
+        }
+
+        // Swap avatars so the logged-in partner's avatar is on top
+        displayAvIdx = partnerAvIdx;
+        displayPartnerAvIdx = avIdx;
+      }
+    }
 
     final String sub;
     switch (mode) {
@@ -383,24 +512,41 @@ class _LeaderItem extends StatelessWidget {
         SizedBox(width: isTop ? 42 : 46, child: Center(child: rankW)),
         // Avatar
         Container(
-          decoration: isTop ? BoxDecoration(
+          decoration: (isTop && !isCoop) ? BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: _rankBorder(rank), width: 2.5),
             boxShadow: [BoxShadow(color: _rankBorder(rank).withValues(alpha: 0.35), blurRadius: 8)],
           ) : null,
-          child: ClipOval(child: FacelessAvatar(index: avIdx, size: 46)),
+          child: isCoop
+              ? LinkedAvatars(
+                  userAvatarIndex: displayAvIdx,
+                  partnerAvatarIndex: displayPartnerAvIdx,
+                  size: 46,
+                  overlapMultiplier: 0.4,
+                )
+              : ClipOval(child: FacelessAvatar(index: displayAvIdx, size: 46)),
         ),
         // Info
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(name, textAlign: TextAlign.start,
-              style: TextStyle(
-                fontWeight: isTop ? FontWeight.w800 : FontWeight.w700,
-                fontSize: isTop ? 15 : 14,
-                color: AppColors.charcoal,
-              ),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(displayName, textAlign: TextAlign.start,
+                    style: TextStyle(
+                      fontWeight: isTop ? FontWeight.w800 : FontWeight.w700,
+                      fontSize: isTop ? 15 : 14,
+                      color: AppColors.charcoal,
+                    ),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                if (isCoop && !displayName.contains('🤝')) ...[
+                  const SizedBox(width: 4),
+                  const Text('🤝', style: TextStyle(fontSize: 14)),
+                ],
+              ],
+            ),
             const SizedBox(height: 3),
             Text(sub, textAlign: TextAlign.start,
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
@@ -448,8 +594,31 @@ class _MyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profile = user['user_profile_v1'] as Map<String, dynamic>? ?? {};
-    final name  = (profile['fullName'] as String? ?? 'أنت').split(' ').first;
+    final bool isCoop = profile['challengeType'] == 'تعاوني' || user['activeSessionId'] != null;
     final avIdx = user['avatarIndex'] as int? ?? 0;
+    final int partnerAvIdx = (user['cooperativePartnerAvatarIndex'] as num?)?.toInt() ?? 0;
+
+    String displayName = isCoop ? (profile['fullName'] as String? ?? 'أنت') : (profile['fullName'] as String? ?? 'أنت').split(' ').first;
+    int displayAvIdx = avIdx;
+    int displayPartnerAvIdx = partnerAvIdx;
+
+    if (isCoop) {
+      final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final partnerUid = user['cooperativePartnerUid'] as String?;
+      if (myUid.isNotEmpty && myUid == partnerUid) {
+        // Swap names so the logged-in partner sees their own name first
+        final rawName = profile['fullName'] as String? ?? 'مستخدم';
+        if (rawName.contains(' 🤝 ')) {
+          final parts = rawName.split(' 🤝 ');
+          if (parts.length == 2) {
+            displayName = '${parts[1]} 🤝 ${parts[0]}';
+          }
+        }
+        // Swap avatars so the logged-in partner's avatar is on top
+        displayAvIdx = partnerAvIdx;
+        displayPartnerAvIdx = avIdx;
+      }
+    }
 
     final String tip;
     switch (mode) {
@@ -479,14 +648,21 @@ class _MyBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              Text(displayName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
               const SizedBox(height: 3),
               Text(tip, textAlign: TextAlign.start,
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11, height: 1.3)),
             ],
           )),
           const SizedBox(width: 12),
-          ClipOval(child: FacelessAvatar(index: avIdx, size: 42)),
+          isCoop
+              ? LinkedAvatars(
+                  userAvatarIndex: displayAvIdx,
+                  partnerAvatarIndex: displayPartnerAvIdx,
+                  size: 42,
+                  overlapMultiplier: 0.4,
+                )
+              : ClipOval(child: FacelessAvatar(index: displayAvIdx, size: 42)),
           const SizedBox(width: 12),
           // الترتيب — يسار
           Container(

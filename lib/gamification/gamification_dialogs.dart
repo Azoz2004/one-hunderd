@@ -834,16 +834,18 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
       await file.writeAsBytes(imageBytes);
 
       final xfile = XFile(file.path);
-      final ShareResult result = await Share.shareXFiles(
-        [xfile],
-        text: 'لقد حققت إنجازاً جديداً في تحدي المئة يوم! 🎉\nوصلت إلى اليوم ${widget.day} وادخرت ${totalSaved.toStringAsFixed(1)} JD.\nهل أنت جاهز للتحدي؟ #تحدي_المئة_يوم',
+      final ShareResult result = await SharePlus.instance.share(
+        ShareParams(
+          files: [xfile],
+          text: 'لقد حققت إنجازاً جديداً في تحدي المئة يوم! 🎉\nوصلت إلى اليوم ${widget.day} وادخرت ${totalSaved.toStringAsFixed(1)} JD.\nهل أنت جاهز للتحدي؟ #تحدي_المئة_يوم',
+        ),
       );
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       
       if (result.status == ShareResultStatus.success) {
         final success = await provider.registerShareReward();
-        if (!mounted) return;
+        if (!context.mounted) return;
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -857,7 +859,7 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
         }
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء المشاركة: $e')),
       );

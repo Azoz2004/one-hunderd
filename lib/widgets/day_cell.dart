@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/savings_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -49,6 +50,7 @@ class DayCell extends StatelessWidget {
   }
 
   void _showDetails(BuildContext context, SavingsProvider provider) {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
     final deposits = provider.getDepositsForDay(dayNumber);
     final calendarDate = provider.getDateForDay(dayNumber);
     final dayTotal = provider.totalForDay(dayNumber);
@@ -164,11 +166,45 @@ class DayCell extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '${dep.amount.toStringAsFixed(1)} JD',
-                                style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w600,
+                              Row(
+                                children: [
+                                  Text(
+                                    '${dep.amount.toStringAsFixed(1)} JD',
+                                    style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                  if (provider.isCooperativeMode && dep.depositedBy != null) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: dep.depositedBy == myUid
+                                            ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
+                                            : const Color(0xFF667EEA).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: dep.depositedBy == myUid
+                                              ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
+                                              : const Color(0xFF667EEA).withValues(alpha: 0.3),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        dep.depositedBy == myUid
+                                            ? 'أنت'
+                                            : (provider.cooperativeUserNames[dep.depositedBy] ?? 'الشريك'),
+                                        style: TextStyle(
+                                          color: dep.depositedBy == myUid
+                                              ? const Color(0xFF4CAF50)
+                                              : const Color(0xFF667EEA),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
+                                  ],
+                                ],
                               ),
                               if (dep.notes != null && dep.notes!.isNotEmpty)
                                 Text(dep.notes!,

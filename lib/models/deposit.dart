@@ -6,12 +6,14 @@ class Deposit {
   final double amount;
   final DateTime date;
   final String? notes;
+  final String? depositedBy; // UID of the user who made this deposit in cooperative mode
 
   Deposit({
     String? id,
     required this.amount,
     required this.date,
     this.notes,
+    this.depositedBy,
   }) : id = id ?? '${date.millisecondsSinceEpoch}_${Random().nextInt(10000)}';
 
   factory Deposit.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class Deposit {
       amount: (json['amount'] as num).toDouble(),
       date: DateTime.parse(json['date'] as String),
       notes: json['notes'] as String?,
+      depositedBy: json['depositedBy'] as String?,
     );
   }
 
@@ -29,6 +32,7 @@ class Deposit {
       'amount': amount,
       'date': date.toIso8601String(),
       'notes': notes,
+      'depositedBy': depositedBy,
     };
   }
 
