@@ -337,6 +337,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final profile = _userData?['user_profile_v1'] as Map<String, dynamic>? ?? {};
     final fullName = profile['fullName'] as String? ?? initialName;
     final contact = profile['contact'] as String? ?? initialEmail;
+    final birthDateStr = profile['birthDate'] as String?;
+    final birthDate = birthDateStr != null ? DateTime.tryParse(birthDateStr) : null;
+    int? age;
+    if (birthDate != null) {
+      age = DateTime.now().year - birthDate.year;
+      if (DateTime.now().month < birthDate.month || (DateTime.now().month == birthDate.month && DateTime.now().day < birthDate.day)) {
+        age--;
+      }
+    }
     final goal = (profile['financialGoal'] as num?)?.toDouble() ?? 5050.0;
     final totalSaved = _totalSaved();
     final streak = _userData?['current_streak_v1'] as int? ?? 0;
@@ -465,6 +474,19 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                                           ),
                                         ],
                                       ),
+                                      if (age != null) ...[
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.cake_rounded, size: 13, color: AppColors.textSecondary),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'العمر: $age سنة',
+                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

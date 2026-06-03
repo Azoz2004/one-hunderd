@@ -10,6 +10,7 @@ import '../providers/savings_provider.dart';
 import 'challenge_explanation_screen.dart';
 import 'challenge_details_screen.dart';
 import 'profile_screen.dart'; // for FacelessAvatar, LinkedAvatars
+import 'home_screen.dart';
 
 /// شاشة نظام التحدي الرئيسية
 ///
@@ -599,7 +600,10 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
                                     actions: [
                                       ElevatedButton(
                                         onPressed: () {
-                                          exit(0);
+                                          Navigator.of(context).pushAndRemoveUntil(
+                                            MaterialPageRoute(builder: (_) => const HomeScreen()),
+                                            (route) => false,
+                                          );
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF2E7D32),
@@ -1316,6 +1320,7 @@ class _FriendsPickerSheetState extends State<_FriendsPickerSheet> {
   bool _loading = true;
   final Set<String> _sentInvitations = {};
   String? _sendingToUid;
+  String? _cancellingUid;
 
   @override
   void initState() {
@@ -1341,6 +1346,37 @@ class _FriendsPickerSheetState extends State<_FriendsPickerSheet> {
       }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // مساعد: تنظيف رسالة الخطأ من كلمة Exception:
+  String _cleanError(Object e) {
+    final msg = e.toString();
+    if (msg.startsWith('Exception: ')) return msg.substring('Exception: '.length);
+    return msg;
+  }
+
+  Future<void> _cancelInvitation(String friendUid) async {
+    setState(() => _cancellingUid = friendUid);
+    try {
+      await ChallengeService.cancelInvitationByUid(friendUid);
+      if (mounted) {
+        setState(() {
+          _sentInvitations.remove(friendUid);
+          _cancellingUid = null;
+        });
+        widget.onInviteSent(); // Refresh count if needed
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cancellingUid = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_cleanError(e), textDirection: TextDirection.rtl),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -1529,33 +1565,47 @@ class _FriendsPickerSheetState extends State<_FriendsPickerSheet> {
                                   ),
                                   const SizedBox(width: 8),
                                   if (alreadySent)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.green
-                                            .withValues(alpha: 0.12),
-                                        borderRadius:
-                                            BorderRadius.circular(20),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.check_rounded,
-                                              size: 14,
-                                              color: AppColors.green),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'تم الإرسال',
-                                            style: TextStyle(
-                                              color: AppColors.green,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
+                                    GestureDetector(
+                                      onTap: _cancellingUid == friend.uid
+                                          ? null
+                                          : () => _cancelInvitation(friend.uid),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: _cancellingUid == friend.uid
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: AppColors.error,
+                                                ),
+                                              )
+                                            : const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.close_rounded,
+                                                      size: 14,
+                                                      color: AppColors.error),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'إلغاء الدعوة',
+                                                    style: TextStyle(
+                                                      color: AppColors.error,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                       ),
                                     )
                                   else

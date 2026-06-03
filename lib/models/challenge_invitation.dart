@@ -8,10 +8,11 @@ enum ChallengeType {
 
 /// حالة الدعوة
 enum InvitationStatus {
-  pending,   // معلّقة
-  accepted,  // مقبولة
-  rejected,  // مرفوضة
-  cancelled, // ملغاة
+  pending,   // معلّقة — تنتظر الرد
+  accepted,  // مقبولة — ارتباط نشط
+  rejected,  // مرفوضة — الطرف الثاني رفض
+  cancelled, // ملغاة — أُلغيت بواسطة المرسل
+  dissolved, // منحلّة — انتهت الشراكة بالانفصال
 }
 
 /// نموذج دعوة التحدي — يمثل دعوة مرسلة من مستخدم لآخر
@@ -36,6 +37,18 @@ class ChallengeInvitation {
     required this.senderAvatarIndex,
     this.createdAt,
   });
+
+  /// هل الدعوة نشطة (تنتظر رداً)؟
+  bool get isPending => status == InvitationStatus.pending;
+
+  /// هل الدعوة تمثل ارتباطاً نشطاً؟
+  bool get isActive => status == InvitationStatus.accepted;
+
+  /// هل الدعوة منتهية الصلاحية (مرّ عليها أكثر من 7 أيام)؟
+  bool get isExpired {
+    if (createdAt == null) return false;
+    return DateTime.now().difference(createdAt!).inDays >= 7;
+  }
 
   /// إنشاء النموذج من وثيقة Firestore
   factory ChallengeInvitation.fromFirestore(DocumentSnapshot doc) {
@@ -103,8 +116,11 @@ class ChallengeInvitation {
         return InvitationStatus.rejected;
       case 'cancelled':
         return InvitationStatus.cancelled;
+      case 'dissolved':
+        return InvitationStatus.dissolved;
       default:
-        return InvitationStatus.pending;
+        // أي قيمة غير معروفة تعني الدعوة لم تعد صالحة
+        return InvitationStatus.cancelled;
     }
   }
 }

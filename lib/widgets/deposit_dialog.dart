@@ -29,6 +29,7 @@ class _DepositDialogState extends State<DepositDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -49,7 +50,12 @@ class _DepositDialogState extends State<DepositDialog> {
   }
 
   Future<void> _save() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
 
     final amount = double.parse(_amountController.text.trim());
     final notes = _notesController.text.trim();
@@ -62,6 +68,9 @@ class _DepositDialogState extends State<DepositDialog> {
       );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -156,9 +165,11 @@ class _DepositDialogState extends State<DepositDialog> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 autofocus: true,
+                maxLength: 5,
                 decoration: const InputDecoration(
                   labelText: 'المبلغ (JD)',
                   prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  counterText: '',
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -167,6 +178,9 @@ class _DepositDialogState extends State<DepositDialog> {
                   final n = double.tryParse(value.trim());
                   if (n == null || n <= 0) {
                     return 'أدخل مبلغاً صحيحاً أكبر من صفر';
+                  }
+                  if (n > 99999) {
+                    return 'المبلغ يتجاوز الحد الأقصى (99,999)';
                   }
                   return null;
                 },
@@ -190,10 +204,12 @@ class _DepositDialogState extends State<DepositDialog> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: provider.isComplete ? null : _save,
-                  icon: const Icon(Icons.check_rounded, size: 20),
+                  onPressed: (provider.isComplete || _isSubmitting) ? null : _save,
+                  icon: _isSubmitting 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_rounded, size: 20),
                   label: Text(
-                    provider.isComplete ? 'أحسنت! أتممت التحدي 🏆' : 'تسجيل الإيداع',
+                    provider.isComplete ? 'أحسنت! أتممت التحدي 🏆' : (_isSubmitting ? 'جاري الإيداع...' : 'تسجيل الإيداع'),
                   ),
                 ),
               ),

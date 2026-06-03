@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import '../services/challenge_service.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
+import 'settings_screen.dart';
 import 'leaderboard_screen.dart';
 import 'friends_screen.dart';
 import 'challenge_hub_screen.dart';
@@ -409,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
           content: const Text(
-            'لقد وافق شريكك على الانفصال! تم تقسيم البيانات بنجاح. سيتم إغلاق التطبيق الآن لتحديث بياناتك الفردية بسلاسة.',
+            'لقد تم الانفصال بنجاح! تم تقسيم البيانات. سيتم إغلاق التطبيق الآن لتحديث بياناتك الفردية بسلاسة.',
             style: TextStyle(
               fontSize: 14,
               color: Color(0xFF2E7D32),
@@ -925,6 +926,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
                       },
                     ),
+
                     _DrawerItem(
                       icon: Icons.emoji_events_rounded,
                       label: 'لوحة الصدارة',
@@ -979,6 +981,14 @@ class _AppDrawerState extends State<_AppDrawer> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         );
+                      },
+                    ),
+                    _DrawerItem(
+                      icon: Icons.settings_rounded,
+                      label: 'الإعدادات',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
                       },
                     ),
                   ],

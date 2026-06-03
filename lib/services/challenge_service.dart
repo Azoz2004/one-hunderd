@@ -28,6 +28,7 @@ class ChallengeService {
   /// 2. لا يمكن إرسال دعوة إذا كنت مرتبطاً بتحدي نشط
   /// 3. لا يمكن إرسال دعوة إذا كان الطرف الآخر مرتبطاً بتحدي نشط
   /// 4. لا يمكن إرسال دعوة مكررة (معلقة) لنفس الشخص
+  /// 5. الحد الأقصى 3 دعوات معلقة في وقت واحد
   static Future<void> sendInvitation({
     required String toUid,
     required ChallengeType type,
@@ -38,33 +39,59 @@ class ChallengeService {
       throw Exception('لا يمكنك إرسال دعوة لنفسك!');
     }
 
-    // التحقق: هل أنا مرتبط بتحدي نشط؟
+    // ── 1. التحقق من حالتي أنا: هل أنا في تحدي نشط؟ ──
     final myActive = await getMyActiveChallenge();
     if (myActive != null) {
+      throw Exception('أنت مرتبط بتحدي نشط بالفعل! لا يمكنك إرسال دعوات جديدة.');
+    }
+
+    // ── 2. التحقق من حالة الطرف الآخر: هل هو في تحدي نشط؟ ──
+    final otherActive = await _hasActiveChallenge(toUid);
+    if (otherActive) {
+      throw Exception('هذا الشخص في تحدي نشط حالياً ولا يمكن دعوته!');
+    }
+
+    // ── 3. فحص الدعوات المعلقة المرسلة: التنظيف + منع التكرار + تطبيق الحد الأقصى ──
+    final pendingSent = await _db
+        .collection(_collection)
+        .where('fromUid', isEqualTo: _myUid)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    int activePendingCount = 0;
+    final now = DateTime.now();
+    final batch = _db.batch();
+    bool batchHasDeletes = false;
+
+    for (final doc in pendingSent.docs) {
+      final data = doc.data();
+      final to = data['toUid'] as String?;
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+
+      if (createdAt != null && now.difference(createdAt).inDays >= 7) {
+        // انتهت الصلاحية → حذف من قاعدة البيانات
+        batch.delete(doc.reference);
+        batchHasDeletes = true;
+        continue;
+      }
+
+      if (to == toUid) {
+        throw Exception('لديك دعوة معلقة لهذا الشخص بالفعل!');
+      }
+
+      activePendingCount++;
+    }
+
+    // تطبيق حذف الدعوات المنتهية أولاً
+    if (batchHasDeletes) await batch.commit();
+
+    if (activePendingCount >= 3) {
       throw Exception(
-        'أنت مرتبط بتحدي نشط بالفعل! لا يمكنك إرسال دعوات جديدة.',
+        'وصلت للحد الأقصى (3 دعوات معلقة). انتظر حتى يُرد عليها أو تنتهي صلاحيتها.',
       );
     }
 
-    // التحقق: هل الشخص الآخر مرتبط بتحدي نشط؟
-    final otherActive = await _hasActiveChallenge(toUid);
-    if (otherActive) {
-      throw Exception('هذا الشخص مرتبط بتحدي نشط بالفعل!');
-    }
-
-    // التحقق: هل هناك دعوة معلقة بالفعل؟
-    final existing = await _db
-        .collection(_collection)
-        .where('fromUid', isEqualTo: _myUid)
-        .where('toUid', isEqualTo: toUid)
-        .where('status', isEqualTo: 'pending')
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) {
-      throw Exception('لديك دعوة معلقة لهذا الشخص بالفعل!');
-    }
-
-    // جلب اسم المرسل إذا لم يُمرَّر
+    // ── 4. جلب بيانات المرسل إذا لم تُمرَّر ──
     String name = senderName;
     int avatarIdx = senderAvatarIndex;
     if (name.isEmpty) {
@@ -77,9 +104,9 @@ class ChallengeService {
       }
     }
 
-    // إنشاء الدعوة
+    // ── 5. إنشاء الدعوة ──
     final invitation = ChallengeInvitation(
-      id: '', // سيتم تعيينه من Firestore
+      id: '',
       fromUid: _myUid,
       toUid: toUid,
       type: type,
@@ -233,8 +260,13 @@ class ChallengeService {
     // 1. قبول الدعوة
     batch.update(docRef, {'status': 'accepted'});
 
-    // 2. إلغاء جميع الدعوات المعلقة الأخرى المرسلة مني أو إلي (للمستقبل)
-    await _cancelAllPendingInvitations(excludeId: invitationId, batch: batch);
+    // 2. حذف جميع الدعوات المعلقة الأخرى لكلا الطرفين (ليس تغيير حالة، بل حذف كلي)
+    await _cancelAllPendingInvitations(
+      excludeId: invitationId,
+      uid1: invitation.toUid,
+      uid2: invitation.fromUid,
+      batch: batch,
+    );
 
     // 3. إنشاء مستند الجلسة المشتركة
     final nameA =
@@ -276,8 +308,7 @@ class ChallengeService {
     };
     batch.set(sessionRef, sessionData);
 
-    // 4. تحديث مستند المستقبل (B) الشخصي — الوحيد الذي يملك صلاحية الكتابة عليه
-    //    الجهاز الخاص بالمرسل (A) سيُحدِّث مستنده بنفسه عندما يستقبل حدث الجلسة الجديدة.
+    // 4. تحديث مستند المستقبل (B)
     final userBRef = _db.collection('users').doc(invitation.toUid);
     batch.set(userBRef, {
       'user_profile_v1': {
@@ -288,6 +319,20 @@ class ChallengeService {
       'cooperativePartnerUid': invitation.fromUid,
       'cooperativePartnerName': nameA,
       'cooperativePartnerAvatarIndex': avatarA,
+    }, SetOptions(merge: true));
+
+    // 5. [إصلاح حرج] تحديث مستند المرسل (A) فوراً بدلاً من انتظار فتح التطبيق.
+    //    هذا يضمن أن أي شخص يريد إرسال دعوة لـ A يجد حسابه 'تعاوني' فوراً.
+    final userARef = _db.collection('users').doc(invitation.fromUid);
+    batch.set(userARef, {
+      'user_profile_v1': {
+        'challengeType': 'تعاوني',
+        'financialGoal': financialGoalA,
+      },
+      'activeSessionId': invitationId,
+      'cooperativePartnerUid': invitation.toUid,
+      'cooperativePartnerName': nameB,
+      'cooperativePartnerAvatarIndex': avatarB,
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -301,6 +346,27 @@ class ChallengeService {
       });
     } catch (e) {
       debugPrint('Error in rejectInvitation: $e');
+      rethrow;
+    }
+  }
+
+  /// إلغاء وحذف دعوة مرسلة لشخص معين كلياً (كأنها لم تُرسل)
+  static Future<void> cancelInvitationByUid(String toUid) async {
+    try {
+      final snap = await _db
+          .collection(_collection)
+          .where('fromUid', isEqualTo: _myUid)
+          .where('toUid', isEqualTo: toUid)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      final batch = _db.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference); // مسحها كلياً من القاعدة
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error in cancelInvitationByUid: $e');
       rethrow;
     }
   }
@@ -329,7 +395,7 @@ class ChallengeService {
   // الاستعلامات
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// جلب الدعوات الواردة المعلقة مع بيانات المرسل
+  /// جلب الدعوات الواردة المعلقة — مع تصفية وحذف المنتهية
   static Future<List<ChallengeInvitation>> getIncomingInvitations() async {
     try {
       final snap = await _db
@@ -338,24 +404,42 @@ class ChallengeService {
           .where('status', isEqualTo: 'pending')
           .get();
 
-      return snap.docs
-          .map((doc) => ChallengeInvitation.fromFirestore(doc))
-          .toList()
-        ..sort((a, b) {
-          final aTime = a.createdAt;
-          final bTime = b.createdAt;
-          if (aTime == null && bTime == null) return 0;
-          if (aTime == null) return 1;
-          if (bTime == null) return -1;
-          return bTime.compareTo(aTime);
-        });
+      final now = DateTime.now();
+      final validInvitations = <ChallengeInvitation>[];
+      final deleteBatch = _db.batch();
+      bool hasExpired = false;
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        if (createdAt != null && now.difference(createdAt).inDays >= 7) {
+          // انتهت الصلاحية → حذف صامت من قاعدة البيانات
+          deleteBatch.delete(doc.reference);
+          hasExpired = true;
+        } else {
+          validInvitations.add(ChallengeInvitation.fromFirestore(doc));
+        }
+      }
+
+      if (hasExpired) deleteBatch.commit().catchError((_) {});
+
+      validInvitations.sort((a, b) {
+        final aTime = a.createdAt;
+        final bTime = b.createdAt;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+
+      return validInvitations;
     } catch (e) {
       debugPrint('Error in getIncomingInvitations: $e');
       return [];
     }
   }
 
-  /// جلب الدعوات المرسلة المعلقة
+  /// جلب الدعوات المرسلة المعلقة — مع تصفية وحذف المنتهية
   static Future<List<ChallengeInvitation>> getSentPendingInvitations() async {
     try {
       final snap = await _db
@@ -364,9 +448,25 @@ class ChallengeService {
           .where('status', isEqualTo: 'pending')
           .get();
 
-      return snap.docs
-          .map((doc) => ChallengeInvitation.fromFirestore(doc))
-          .toList();
+      final now = DateTime.now();
+      final validInvitations = <ChallengeInvitation>[];
+      final deleteBatch = _db.batch();
+      bool hasExpired = false;
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        if (createdAt != null && now.difference(createdAt).inDays >= 7) {
+          deleteBatch.delete(doc.reference);
+          hasExpired = true;
+        } else {
+          validInvitations.add(ChallengeInvitation.fromFirestore(doc));
+        }
+      }
+
+      if (hasExpired) deleteBatch.commit().catchError((_) {});
+
+      return validInvitations;
     } catch (e) {
       debugPrint('Error in getSentPendingInvitations: $e');
       return [];
@@ -374,29 +474,58 @@ class ChallengeService {
   }
 
   /// التحقق: هل لدى المستخدم الحالي تحدي نشط (دعوة مقبولة)؟
-  /// يُرجع الدعوة المقبولة إذا وُجدت، أو null.
+  ///
+  /// يعتمد على مصدرين للتحقق:
+  /// 1. مستند المستخدم (challengeType) — السريع
+  /// 2. مجموعة cooperative_sessions — للتأكيد
   static Future<ChallengeInvitation?> getMyActiveChallenge() async {
     try {
-      // التحقق كمرسل
+      // ── المصدر الأول: مستند المستخدم ──
+      final userDoc = await _db.collection('users').doc(_myUid).get();
+      final profile = (userDoc.data()?['user_profile_v1'] as Map<String, dynamic>?) ?? {};
+      final challengeType = profile['challengeType'] as String?;
+
+      if (challengeType == 'فردي' || challengeType == null) {
+        // الحساب فردي → نظّف أي دعوات accepted عالقة بصمت
+        _cleanupOrphanedAcceptedInvitations(_myUid).catchError((_) {});
+        return null;
+      }
+
+      // challengeType == 'تعاوني' → تحقق من وجود جلسة حقيقية نشطة
+      final sessionSnap = await _db
+          .collection('cooperative_sessions')
+          .where('users', arrayContains: _myUid)
+          .limit(5)
+          .get();
+
+      final hasRealSession = sessionSnap.docs.any(
+        (doc) => (doc.data()['status'] as String?) == 'active',
+      );
+
+      if (!hasRealSession) {
+        // نوع الحساب يقول تعاوني لكن لا توجد جلسة حقيقية نشطة
+        // → ينظّف الدعوات العالقة ويُعيد null
+        _cleanupOrphanedAcceptedInvitations(_myUid).catchError((_) {});
+        return null;
+      }
+
+      // ── المصدر الثاني: مجموعة الدعوات ──
       final sentSnap = await _db
           .collection(_collection)
           .where('fromUid', isEqualTo: _myUid)
           .where('status', isEqualTo: 'accepted')
           .limit(1)
           .get();
-
       if (sentSnap.docs.isNotEmpty) {
         return ChallengeInvitation.fromFirestore(sentSnap.docs.first);
       }
 
-      // التحقق كمستقبل
       final recvSnap = await _db
           .collection(_collection)
           .where('toUid', isEqualTo: _myUid)
           .where('status', isEqualTo: 'accepted')
           .limit(1)
           .get();
-
       if (recvSnap.docs.isNotEmpty) {
         return ChallengeInvitation.fromFirestore(recvSnap.docs.first);
       }
@@ -409,29 +538,72 @@ class ChallengeService {
   }
 
   /// التحقق: هل مستخدم معين لديه تحدي نشط؟
+  ///
+  /// يعتمد على مصدرين للتأكيد:
+  /// 1. challengeType في مستند المستخدم
+  /// 2. cooperative_sessions للتحقق من وجود جلسة حقيقية (فقط إذا كان المستعلم هو نفس المستخدم uid == _myUid)
   static Future<bool> _hasActiveChallenge(String uid) async {
     try {
-      final sentSnap = await _db
-          .collection(_collection)
-          .where('fromUid', isEqualTo: uid)
-          .where('status', isEqualTo: 'accepted')
-          .limit(1)
+      // ── المصدر الأول: مستند المستخدم ──
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final profile = (userDoc.data()?['user_profile_v1'] as Map<String, dynamic>?) ?? {};
+      final challengeType = profile['challengeType'] as String?;
+
+      if (challengeType == 'فردي' || challengeType == null) {
+        // الحساب فردي قطعاً → نظّف أي invitations عالقة بصمت
+        if (uid == _myUid) {
+          _cleanupOrphanedAcceptedInvitations(uid).catchError((_) {});
+        }
+        return false;
+      }
+
+      // challengeType == 'تعاوني'
+      
+      // لا نملك صلاحية قراءة جلسات الطرف الآخر (سيحدث خطأ Permission Denied)، 
+      // لذلك نثق ببيانات الملف الشخصي للطرف الآخر لمنع إرسال الدعوات إليه.
+      if (uid != _myUid) {
+        return true; 
+      }
+
+      // إذا كان الحساب هو حسابي، أستطيع التحقق من وجود جلسة فعلية
+      final sessionSnap = await _db
+          .collection('cooperative_sessions')
+          .where('users', arrayContains: uid)
+          .limit(5)
           .get();
 
-      if (sentSnap.docs.isNotEmpty) return true;
+      final hasRealSession = sessionSnap.docs.any(
+        (doc) => (doc.data()['status'] as String?) == 'active',
+      );
 
-      final recvSnap = await _db
-          .collection(_collection)
-          .where('toUid', isEqualTo: uid)
-          .where('status', isEqualTo: 'accepted')
-          .limit(1)
-          .get();
+      if (!hasRealSession) {
+        // challengeType يقول تعاوني لكن لا جلسة نشطة → حالة orphaned
+        _cleanupOrphanedAcceptedInvitations(uid).catchError((_) {});
+        return false;
+      }
 
-      return recvSnap.docs.isNotEmpty;
+      return true;
     } catch (e) {
       debugPrint('Error in _hasActiveChallenge: $e');
-      return false;
+      // في حالة حدوث أي خطأ، نعيد true لمنع إرسال دعوة بالخطأ كإجراء احترازي
+      return true; 
     }
+  }
+
+  /// تنظيف أي دعوات مقبولة عالقة إذا كان الحساب فردياً
+  static Future<void> _cleanupOrphanedAcceptedInvitations(String uid) async {
+    try {
+      final batch = _db.batch();
+      final sentSnap = await _db.collection(_collection).where('fromUid', isEqualTo: uid).where('status', isEqualTo: 'accepted').get();
+      for (final doc in sentSnap.docs) {
+        batch.update(doc.reference, {'status': 'dissolved'});
+      }
+      final recvSnap = await _db.collection(_collection).where('toUid', isEqualTo: uid).where('status', isEqualTo: 'accepted').get();
+      for (final doc in recvSnap.docs) {
+        batch.update(doc.reference, {'status': 'dissolved'});
+      }
+      await batch.commit();
+    } catch (_) {}
   }
 
   /// ينهي جميع الدعوات المقبولة بين مستخدمين (عند الانفصال)
@@ -479,7 +651,21 @@ class ChallengeService {
         .where('toUid', isEqualTo: _myUid)
         .where('status', isEqualTo: 'pending')
         .snapshots()
-        .map((snap) => snap.docs.length);
+        .map((snap) {
+          final now = DateTime.now();
+          int count = 0;
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+            if (createdAt != null && now.difference(createdAt).inDays >= 7) {
+              // منتهية → احذفها في الخلفية بصمت
+              doc.reference.delete().catchError((_) {});
+            } else {
+              count++;
+            }
+          }
+          return count;
+        });
   }
 
   /// Stream يُرجع قائمة الدعوات الواردة المعلقة (لشاشة الطلبات)
@@ -490,18 +676,24 @@ class ChallengeService {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snap) {
-          final list =
-              snap.docs
-                  .map((doc) => ChallengeInvitation.fromFirestore(doc))
-                  .toList()
-                ..sort((a, b) {
-                  final aTime = a.createdAt;
-                  final bTime = b.createdAt;
-                  if (aTime == null && bTime == null) return 0;
-                  if (aTime == null) return 1;
-                  if (bTime == null) return -1;
-                  return bTime.compareTo(aTime);
-                });
+          final list = <ChallengeInvitation>[];
+          for (final doc in snap.docs) {
+            final inv = ChallengeInvitation.fromFirestore(doc);
+            if (inv.isExpired) {
+              // منتهية → احذفها في الخلفية ولا تعرضها
+              doc.reference.delete().catchError((_) {});
+            } else {
+              list.add(inv);
+            }
+          }
+          list.sort((a, b) {
+            final aTime = a.createdAt;
+            final bTime = b.createdAt;
+            if (aTime == null && bTime == null) return 0;
+            if (aTime == null) return 1;
+            if (bTime == null) return -1;
+            return bTime.compareTo(aTime);
+          });
           return list;
         });
   }
@@ -510,34 +702,37 @@ class ChallengeService {
   // مساعدات داخلية
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// إلغاء جميع الدعوات المعلقة للمستخدم الحالي (مرسلة ومستقبلة)
   static Future<void> _cancelAllPendingInvitations({
     required String excludeId,
+    required String uid1,
+    required String uid2,
     required WriteBatch batch,
   }) async {
-    // الدعوات المرسلة مني
-    final sentSnap = await _db
-        .collection(_collection)
-        .where('fromUid', isEqualTo: _myUid)
-        .where('status', isEqualTo: 'pending')
-        .get();
+    for (final uid in [uid1, uid2]) {
+      // الدعوات المرسلة
+      final sentSnap = await _db
+          .collection(_collection)
+          .where('fromUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .get();
 
-    for (final doc in sentSnap.docs) {
-      if (doc.id != excludeId) {
-        batch.update(doc.reference, {'status': 'cancelled'});
+      for (final doc in sentSnap.docs) {
+        if (doc.id != excludeId) {
+          batch.delete(doc.reference); // حذف كلي من القاعدة
+        }
       }
-    }
 
-    // الدعوات الواردة إلي
-    final recvSnap = await _db
-        .collection(_collection)
-        .where('toUid', isEqualTo: _myUid)
-        .where('status', isEqualTo: 'pending')
-        .get();
+      // الدعوات الواردة
+      final recvSnap = await _db
+          .collection(_collection)
+          .where('toUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .get();
 
-    for (final doc in recvSnap.docs) {
-      if (doc.id != excludeId) {
-        batch.update(doc.reference, {'status': 'cancelled'});
+      for (final doc in recvSnap.docs) {
+        if (doc.id != excludeId) {
+          batch.delete(doc.reference); // حذف كلي من القاعدة
+        }
       }
     }
   }

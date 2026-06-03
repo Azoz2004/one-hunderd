@@ -57,6 +57,7 @@ class SavingsProvider extends ChangeNotifier {
 
   bool _hasPendingSeparationRequest = false;
   String? _separationRequestBy;
+  DateTime? _separationRequestCreatedAt;
   bool _isSessionDissolved = false;
 
   String? get activeSessionId => _activeSessionId;
@@ -68,6 +69,11 @@ class SavingsProvider extends ChangeNotifier {
 
   bool get hasPartnerRequestedSeparation => _hasPendingSeparationRequest && _separationRequestBy != FirebaseAuth.instance.currentUser?.uid && !_isSessionDissolved;
   bool get hasCurrentRequestedSeparation => _hasPendingSeparationRequest && _separationRequestBy == FirebaseAuth.instance.currentUser?.uid && !_isSessionDissolved;
+
+  bool get canForceSeparate {
+    if (!hasCurrentRequestedSeparation || _separationRequestCreatedAt == null) return false;
+    return DateTime.now().difference(_separationRequestCreatedAt!).inHours >= 48;
+  }
   bool get isSessionDissolved => _isSessionDissolved;
 
   Map<String, String> _cooperativeUserNames = {};
@@ -439,9 +445,11 @@ class SavingsProvider extends ChangeNotifier {
       if (sepReq != null) {
         _hasPendingSeparationRequest = sepReq['status'] == 'pending';
         _separationRequestBy = sepReq['requestedBy'] as String?;
+        _separationRequestCreatedAt = (sepReq['createdAt'] as Timestamp?)?.toDate();
       } else {
         _hasPendingSeparationRequest = false;
         _separationRequestBy = null;
+        _separationRequestCreatedAt = null;
       }
 
       // Parse shared user names
@@ -701,13 +709,16 @@ class SavingsProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> _persistCooperative() async {
+  Future<void> _persistCooperative({Deposit? newDeposit}) async {
     if (_activeSessionId == null) return;
 
     final docRef = FirebaseFirestore.instance.collection('cooperative_sessions').doc(_activeSessionId);
     
     final updateData = <String, dynamic>{
-      'deposits': _deposits.map((d) => d.toJson()).toList(),
+      if (newDeposit != null)
+        'deposits': FieldValue.arrayUnion([newDeposit.toJson()])
+      else
+        'deposits': _deposits.map((d) => d.toJson()).toList(),
       'currentStreak': _currentStreak,
       'lifebuoys': _lifebuoys,
       'woodenCoins': _woodenCoins,
@@ -723,7 +734,16 @@ class SavingsProvider extends ChangeNotifier {
     // fires on their side (both devices listen to the same cooperative_sessions doc).
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid != null) {
+      // ── إنشاء نسخة الملف الشخصي مع حقول البحث ──────────────────────────────
+      Map<String, dynamic>? profileData;
+      if (_userProfile != null) {
+        profileData = _userProfile!.toJson();
+        profileData['fullName_lower'] = (_userProfile!.fullName).toLowerCase().trim();
+        profileData['contact_lower'] = (_userProfile!.contact).toLowerCase().trim();
+      }
+
       final myUserDocUpdates = <String, dynamic>{
+        _kUserProfile: profileData ?? FieldValue.delete(),
         'current_streak_v1': _currentStreak,
         'completed_days_count': completedDays,
         'is_complete_v1': isComplete,
@@ -739,10 +759,6 @@ class SavingsProvider extends ChangeNotifier {
         'cooperativePartnerUid': _partnerUid,
         'cooperativePartnerName': _partnerName != null ? _cleanName(_partnerName!) : null,
         'cooperativePartnerAvatarIndex': _partnerAvatarIndex,
-        'user_profile_v1': {
-          'fullName': _userProfile != null ? _cleanName(_userProfile!.fullName) : 'مستخدم',
-          'challengeType': 'تعاوني',
-        },
       };
       
       await FirebaseFirestore.instance
@@ -752,6 +768,26 @@ class SavingsProvider extends ChangeNotifier {
           .catchError((e) {
         debugPrint('Error updating my user doc in _persistCooperative: $e');
       });
+
+      // 🔥 تحديث مستند الشريك أيضاً للحفاظ على تزامن لوحة الصدارة 🔥
+      if (_partnerUid != null) {
+        final partnerDocUpdates = <String, dynamic>{
+          'current_streak_v1': _currentStreak,
+          'completed_days_count': completedDays,
+          'is_complete_v1': isComplete,
+          'completedAt': _completedAt != null ? Timestamp.fromDate(_completedAt!) : FieldValue.delete(),
+          'lifebuoys_v1': _lifebuoys,
+          'wooden_coins_v1': _woodenCoins,
+          'last_deposit_date_v1': _lastDepositDate != null ? _lastDepositDate!.toIso8601String() : FieldValue.delete(),
+        };
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_partnerUid!)
+            .set(partnerDocUpdates, SetOptions(merge: true))
+            .catchError((e) {
+          debugPrint('Error updating partner user doc: $e');
+        });
+      }
     }
   }
 
@@ -947,9 +983,9 @@ class SavingsProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> _persist() async {
+  Future<void> _persist({Deposit? newDeposit}) async {
     if (isCooperativeMode) {
-      await _persistCooperative();
+      await _persistCooperative(newDeposit: newDeposit);
       return;
     }
 
@@ -1002,6 +1038,67 @@ class SavingsProvider extends ChangeNotifier {
   Future<void> login(String email, String password) async {
     await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
     await init();
+  }
+  Future<void> updateAccountDetails({
+    String? newEmail,
+    String? newPassword,
+    String? maritalStatus,
+    DateTime? birthDate,
+    String? goal,
+    double? financialGoal,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _userProfile == null) throw Exception('User not logged in');
+
+    // 1. Update Firebase Auth if needed
+    if (newEmail != null && newEmail.isNotEmpty && newEmail != user.email) {
+      await user.verifyBeforeUpdateEmail(newEmail);
+    }
+    if (newPassword != null && newPassword.isNotEmpty) {
+      await user.updatePassword(newPassword);
+    }
+
+    // 2. Update Firestore document
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    
+    // Build update map based on what's provided, fallback to current profile data
+    final updatedMaritalStatus = maritalStatus ?? _userProfile!.maritalStatus;
+    final updatedBirthDate = birthDate ?? _userProfile!.birthDate;
+    final updatedGoal = goal ?? _userProfile!.goal;
+    final updatedFinancialGoal = financialGoal ?? _userProfile!.financialGoal;
+    
+    // We must ensure 'contact' is updated if email was changed (since contact acts as email usually)
+    final updatedContact = (newEmail != null && newEmail.isNotEmpty) ? newEmail : _userProfile!.contact;
+
+    // 2. Update local state
+    _userProfile = UserProfile(
+      fullName: _userProfile!.fullName,
+      gender: _userProfile!.gender,
+      contact: updatedContact,
+      financialGoal: updatedFinancialGoal,
+      maritalStatus: updatedMaritalStatus,
+      goal: updatedGoal,
+      challengeType: _userProfile!.challengeType,
+      birthDate: updatedBirthDate,
+    );
+    notifyListeners();
+    
+    // 3. Persist to Firestore
+    await _persist();
+    
+    // 4. Sync with partner if in cooperative mode
+    if (_activeSessionId != null && _partnerUid != null) {
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(
+        FirebaseFirestore.instance.collection('cooperative_sessions').doc(_activeSessionId),
+        {'financialGoal': updatedFinancialGoal}
+      );
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(_partnerUid),
+        {'user_profile_v1.financialGoal': updatedFinancialGoal}
+      );
+      batch.commit().catchError((_) {});
+    }
   }
 
   Future<void> signUp({
@@ -1089,14 +1186,15 @@ class SavingsProvider extends ChangeNotifier {
     final user = FirebaseAuth.instance.currentUser;
     final uid = user?.uid;
 
-    _deposits.add(Deposit(
+    final deposit = Deposit(
       amount: amount,
       date: today,
       notes: notes,
       depositedBy: isCooperativeMode ? uid : null,
-    ));
+    );
+    _deposits.add(deposit);
     notifyListeners();
-    await _persist();
+    await _persist(newDeposit: deposit);
 
     // ─ حماية من التلاعب بالوقت: حفظ Server Timestamp في Firestore ─
     // يُستخدم هذا الحقل للتحقق المستقبلي من صحة التواريخ
