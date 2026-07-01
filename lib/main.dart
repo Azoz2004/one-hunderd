@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'providers/savings_provider.dart';
-import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
-import 'theme/app_theme.dart';
-import 'services/notification_service.dart';
+import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/features/home/screens/home_screen.dart';
+import 'package:one_hunderd/features/auth/screens/auth_screen.dart';
+import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
+import 'package:one_hunderd/core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

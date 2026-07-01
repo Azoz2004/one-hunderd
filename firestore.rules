@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── مستخدمو التطبيق ───
+    match /users/{userId} {
+      // القراءة: مسموح للمستخدمين المسجلين (للبحث ورؤية الأصدقاء)
+      allow read: if request.auth != null;
+      
+      // الإنشاء والحذف: فقط صاحب الحساب نفسه
+      allow create, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // التحديث: مسموح لصاحب الحساب نفسه لتحديث بياناته، 
+      // أو يسمح للطرف الآخر (الشريك) بتحديث حقول الشراكة والربط فقط عند بدء التحدي التعاوني أو التنافسي المشترك
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (
+          request.resource.data.cooperativePartnerUid == request.auth.uid &&
+          request.resource.data.activeSessionId != null
+        ) ||
+        (
+          request.resource.data.competitivePartnerUid == request.auth.uid &&
+          request.resource.data.activeCompetitiveSessionId != null
+        )
+      );
+    }
+
+    // ─── علاقات الصداقة المؤكدة ───
+    match /friendships/{docId} {
+      // القراءة: فقط إذا كان المستخدم طرفاً في الصداقة
+      allow read: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+      // الإنشاء: مسموح فقط إذا كان المستخدم الذي ينشئ الصداقة هو أحد أطرافها (إغلاق ثغرة أمنية)
+      allow create: if request.auth != null &&
+                      request.auth.uid in request.resource.data.users;
+      allow update: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+      allow delete: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+    }
+
+    // ─── طلبات الصداقة ───
+    match /friend_requests/{docId} {
+      // القراءة: المرسل أو المستقبل
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.fromUid ||
+        request.auth.uid == resource.data.toUid
+      );
+      // الإنشاء: أي مستخدم مسجل يرسل الطلب باسمه
+      allow create: if request.auth != null &&
+                      request.auth.uid == request.resource.data.fromUid;
+      // التحديث: المستقبل (للقبول) أو المرسل (للإلغاء)
+      allow update: if request.auth != null && (
+                      request.auth.uid == resource.data.toUid ||
+                      request.auth.uid == resource.data.fromUid
+                    );
+      // الحذف: مسموح للمرسل فقط (لإلغاء الطلب)
+      allow delete: if request.auth != null &&
+                      request.auth.uid == resource.data.fromUid;
+    }
+
+    // ─── دعوات التحدي (محدثة ومغلقة أمنياً) ───
+    match /challenge_invitations/{docId} {
+      // القراءة: مسموح فقط لأطراف الدعوة (المرسل والمستقبل) لحماية الخصوصية
+      allow read: if request.auth != null && (
+                      request.auth.uid == resource.data.fromUid ||
+                      request.auth.uid == resource.data.toUid
+                    );
+      
+      // الإنشاء: يجب أن يكون المستخدم المسجل هو مرسل الدعوة نفسه
+      allow create: if request.auth != null &&
+                      request.auth.uid == request.resource.data.fromUid;
+                      
+      // التحديث: مسموح للمستقبل (للقبول/الرفض) أو للمرسل (للإلغاء)
+      allow update: if request.auth != null && (
+                      request.auth.uid == resource.data.toUid ||
+                      request.auth.uid == resource.data.fromUid
+                    );
+                    
+      // الحذف: مسموح لأطراف الدعوة نفسها فقط (لمنع أي شخص من حذف دعوات الآخرين)
+      allow delete: if request.auth != null && (
+                      request.auth.uid == resource.data.fromUid ||
+                      request.auth.uid == resource.data.toUid
+                    );
+    }
+
+    // ─── جلسات التحدي المشتركة ───
+    match /cooperative_sessions/{docId} {
+      // القراءة: فقط إذا كان المستخدم مسجلاً وطرفاً في هذه الجلسة المشتركة
+      allow read: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+      // الإنشاء: مسموح فقط إذا كان المستخدم المنشئ جزءاً من مصفوفة الأعضاء
+      allow create: if request.auth != null &&
+                      request.auth.uid in request.resource.data.users;
+      // التحديث والحذف: فقط لأطراف الجلسة المشتركة
+      allow update, delete: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+    }
+    
+    // ─── جلسات التحدي التنافسية ───
+    match /competitive_sessions/{sessionId} {
+      // السماح بقراءة وكتابة الجلسات التنافسية لمن هم داخل الجلسة
+      allow read: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+      allow create: if request.auth != null &&
+                      request.auth.uid in request.resource.data.users;
+      allow update, delete: if request.auth != null &&
+                      request.auth.uid in resource.data.users;
+    }
+  }
+}

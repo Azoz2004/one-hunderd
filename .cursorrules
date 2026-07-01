@@ -1,0 +1,10 @@
+# One Hundred Project Rules
+
+## Skill 1: Minimalist_UI_Dev
+حافظ على هوية بصرية صارمة وبسيطة جداً. استخدم دائماً كلاس `AppColors` من ملف `app_theme.dart`. يمنع منعاً باتاً تغيير شكل أو ألوان الـ Widgets الأساسية أو إضافة زخارف بصرية معقدة غير مطلوبة.
+
+## Skill 2: Firebase_Clean_Service
+عند بناء أو التعديل على دوال Firestore، التزم باستخدام كتل `try-catch` و `WriteBatch` تماماً كما هو مطبق في `ChallengeService`. لا تضف أي منطق لتحديث واجهة المستخدم (UI) داخل الـ Services.
+
+## Skill 3: Gamification_Logic
+أي عملية تخصم أو تضيف عملات (Wooden Coins) أو أطواق نجاة (Lifebuoys) يجب أن تمر عبر دوال `SavingsProvider` المعتمدة، ولا تقم أبداً بإعادة اختراع هذا المنطق في ملفات أخرى.
