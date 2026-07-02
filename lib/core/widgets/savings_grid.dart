@@ -13,9 +13,9 @@ class SavingsGrid extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 10,
-        childAspectRatio: 1,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
+        childAspectRatio: 1.0,
+        crossAxisSpacing: 3.0, // tighter gap for larger circles
+        mainAxisSpacing: 8.5, // optimized height to fit the enlarged circles inside the sticker
       ),
       itemCount: 100,
       itemBuilder: (context, index) => DayCell(dayNumber: index + 1),

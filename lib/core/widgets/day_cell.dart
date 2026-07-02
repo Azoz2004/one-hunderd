@@ -30,19 +30,28 @@ class DayCell extends StatelessWidget {
           color: completed ? AppColors.green : Colors.transparent,
           shape: BoxShape.circle,
           border: Border.all(
-            color: completed ? AppColors.green : AppColors.border,
+            color: completed ? AppColors.green : const Color(0xFFC0B8AD), // darker border for uncompleted (warm gray)
             width: 1.2,
           ),
         ),
         child: Center(
           child: completed
               ? const Icon(Icons.check_rounded, color: AppColors.white, size: 14)
-              : Text(
-                  '$dayNumber',
-                  style: TextStyle(
-                    color: AppColors.charcoal.withValues(alpha: 0.6),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2.5, left: 1.5, right: 1.5), // Center vertically, prevent touching edges
+                    child: Text(
+                      '$dayNumber',
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF4A3E30), // even darker warm brown
+                        fontSize: 12.5, // slightly reduced to prevent extreme scaling for 100
+                        fontWeight: FontWeight.w800, // bolder text
+                        height: 1.0, // force compact line height
+                      ),
+                    ),
                   ),
                 ),
         ),

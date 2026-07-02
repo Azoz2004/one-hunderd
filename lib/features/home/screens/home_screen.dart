@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -775,6 +776,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (user == null) return const AuthScreen();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFDFD0BC), // warmer background matching reference
       drawer: _AppDrawer(provider: provider),
       body: Stack(
         children: [
@@ -786,7 +788,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 SliverAppBar(
                   pinned: true,
                   floating: false,
-                  backgroundColor: AppColors.background,
+                  backgroundColor: const Color(0xFFDFD0BC),
                   elevation: 0,
                   scrolledUnderElevation: 0,
                   automaticallyImplyLeading: false,
@@ -1473,163 +1475,244 @@ class _HouseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
+    // Flower images width — used to reserve padding so grid never overlaps them
+    const double flowerWidth = 56.0; // enlarged from 38
+    const double flowerReservedPadding = 30.0; // Adjusted padding to prevent leaf text overlap
+
+    return PhysicalShape(
       clipper: _HouseClipper(),
-      child: Container(
-        color: AppColors.cardFill,
-        child: Column(
+      elevation: 20, // much stronger 3D elevation
+      color: const Color(0xFFFAF3E8),
+      shadowColor: const Color(0xFF6B4E31).withValues(alpha: 0.45), 
+      child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            const SizedBox(height: 48), // space for the roof peak
-            // ── Brand Logo ──
-            Image.asset(
-              'assets/images/logo.png',
-              height: 120,
-              fit: BoxFit.contain,
+            // ── Roof Eaves & Chimney Painter ──
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _RoofPainter(),
+              ),
             ),
-            const SizedBox(height: 16),
+            // ── Main Column: Logo + Grid + Cards ──────────────────────
+            Column(
+              children: [
+                const SizedBox(height: 48), // reduced top space to raise logo
 
-            // ── 100-Day Grid ──
-            const SavingsGrid(),
-            const SizedBox(height: 20),
+                // ── Brand Logo ──
+                Image.asset(
+                  'assets/images/Logo.png',
+                  height: 76, // slightly smaller logo
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 8), // reduced space before grid
 
-            // ── "Save for" section ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  // Left: Save for goal
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (provider.isCooperativeMode) {
-                          _showCooperativeGoalBottomSheet(context, user, provider);
-                        } else if (provider.isCompetitiveMode) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ChallengeCompetitiveScreen(),
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: AppColors.borderLight,
-                            width: 1,
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Text('🎯 ', style: TextStyle(fontSize: 14)),
-                                Text(
-                                  'الهدف المالي',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                // ── 100-Day Grid (padded so flowers don't overlap) ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: flowerReservedPadding,
+                  ),
+                  child: const SavingsGrid(),
+                ),
+                const SizedBox(height: 12),
+
+                // ── "Save for" section ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      // Left: Financial goal
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (provider.isCooperativeMode) {
+                              _showCooperativeGoalBottomSheet(
+                                  context, user, provider);
+                            } else if (provider.isCompetitiveMode) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ChallengeCompetitiveScreen(),
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF3E8), // exact house sticker color
+                              border: Border.all(
+                                color: const Color(0xFFEDE0CB), // warm border
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x1F6B4E31), // softer shadow (~12% opacity)
+                                  blurRadius: 10,
+                                  spreadRadius: 0,
+                                  offset: Offset(0, 4),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.only(bottom: 4),
-                              decoration: const BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: AppColors.borderLight,
-                                    width: 1,
-                                    style: BorderStyle.solid,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text('🎯 ',
+                                        style: TextStyle(fontSize: 14)),
+                                    Text(
+                                      'الهدف المالي',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: AppColors.borderLight,
+                                        width: 1,
+                                        style: BorderStyle.solid,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${_formatNumber(user.financialGoal)} JD',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w700),
                                   ),
                                 ),
-                              ),
-                              child: Text(
-                                '${_formatNumber(user.financialGoal)} JD',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Right: progress box
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (provider.isCooperativeMode) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ChallengeDetailsScreen()),
-                          );
-                        } else if (provider.isCompetitiveMode) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ChallengeCompetitiveScreen(),
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: AppColors.borderLight,
-                            width: 1,
                           ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'المبلغ المدخر',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${provider.totalSaved.toStringAsFixed(2)} JD',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.green,
-                                  ),
-                            ),
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
-                                value: user.financialGoal > 0
-                                    ? (provider.totalSaved / user.financialGoal)
-                                          .clamp(0.0, 1.0)
-                                    : 0,
-                                minHeight: 4,
-                                backgroundColor: AppColors.borderLight,
-                                valueColor: const AlwaysStoppedAnimation(
-                                  AppColors.green,
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      // Right: Saved amount
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (provider.isCooperativeMode) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ChallengeDetailsScreen()),
+                              );
+                            } else if (provider.isCompetitiveMode) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ChallengeCompetitiveScreen(),
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF3E8), // exact house sticker color
+                              border: Border.all(
+                                color: const Color(0xFFEDE0CB), // warm border
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x1F6B4E31), // softer shadow (~12% opacity)
+                                  blurRadius: 10,
+                                  spreadRadius: 0,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'المبلغ المدخر',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${provider.totalSaved.toStringAsFixed(2)} JD',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.green,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: user.financialGoal > 0
+                                        ? (provider.totalSaved /
+                                                user.financialGoal)
+                                            .clamp(0.0, 1.0)
+                                        : 0,
+                                    minHeight: 4,
+                                    backgroundColor: AppColors.borderLight,
+                                    valueColor: const AlwaysStoppedAnimation(
+                                      AppColors.green,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+
+            // ── Flower Left — positioned on the left edge, vertically centered on the grid area ──
+            Positioned(
+              left: -4,
+              top: 150, // adjusted to match new grid height
+              child: Image.asset(
+                'assets/images/Flower_L.png',
+                width: flowerWidth,
+                height: 230,
+                fit: BoxFit.contain,
               ),
             ),
-            const SizedBox(height: 24),
+
+            // ── Flower Right — positioned on the right edge, vertically centered on the grid area ──
+            Positioned(
+              right: -4,
+              top: 150, // adjusted to match new grid height
+              child: Image.asset(
+                'assets/images/Flower_R.png',
+                width: flowerWidth,
+                height: 230,
+                fit: BoxFit.contain,
+              ),
+            ),
           ],
         ),
-      ),
     );
   }
 
@@ -1651,22 +1734,195 @@ class _HouseCard extends StatelessWidget {
 class _HouseClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
-    const roofHeight = 44.0;
-    final path = Path()
-      ..moveTo(0, roofHeight)
-      ..lineTo(size.width / 2, 0)
-      ..lineTo(size.width, roofHeight)
-      ..lineTo(size.width, size.height - 12)
-      ..quadraticBezierTo(size.width, size.height, size.width - 12, size.height)
-      ..lineTo(12, size.height)
-      ..quadraticBezierTo(0, size.height, 0, size.height - 12)
-      ..close();
-    return path;
+    final double w = size.width;
+    final double h = size.height;
+    const double cornerR = 30.0;
+    
+    // Geometry Constants
+    final double peakY = 22.0;
+    final double slope = 75.0 / (w / 2); // 75px drop over half width
+    final double wallY = peakY + (w / 2) * slope;
+    
+    // We want the dark roof to protrude by 10 pixels without touching the phone edge.
+    // Screen margin is 16.0. 
+    // If overhangX = -1.0, painted roof ends at -10.0 (10px protrusion).
+    // Silhouette ends at -1.0 - 13.0 = -14.0 (2px gap from phone edge).
+    final double overhangX = -1.0; 
+    final double overhangY = peakY + (w / 2 - overhangX) * slope;
+    
+    final Offset p0 = Offset(overhangX, overhangY);
+    final Offset p1 = Offset(w / 2, peakY);
+    final Offset p2 = Offset(w - overhangX, overhangY);
+    
+    final double roofThick = 18.0;
+    final double bw = 4.0; // White border width
+    final double R = (roofThick / 2) + bw; // 9 + 4 = 13.0
+    
+    // Helper to draw a thick polygon line for the silhouette
+    Path createLinePolygon(Offset a, Offset b, double radius) {
+      final double dx = b.dx - a.dx;
+      final double dy = b.dy - a.dy;
+      final double len = math.sqrt(dx * dx + dy * dy);
+      final double nx = -dy / len * radius;
+      final double ny = dx / len * radius;
+      
+      final path = Path();
+      // CLOCKWISE winding to perfectly union with clockwise circles
+      path.moveTo(a.dx - nx, a.dy - ny);
+      path.lineTo(b.dx - nx, b.dy - ny);
+      path.lineTo(b.dx + nx, b.dy + ny);
+      path.lineTo(a.dx + nx, a.dy + ny);
+      path.close();
+      return path;
+    }
+    
+    // 1. White border silhouette for Roof
+    final whiteRoof = Path();
+    whiteRoof.addPath(createLinePolygon(p0, p1, R), Offset.zero);
+    whiteRoof.addPath(createLinePolygon(p1, p2, R), Offset.zero);
+    whiteRoof.addOval(Rect.fromCircle(center: p0, radius: R));
+    whiteRoof.addOval(Rect.fromCircle(center: p1, radius: R));
+    whiteRoof.addOval(Rect.fromCircle(center: p2, radius: R));
+
+    // 2. White border silhouette for Chimney
+    final double pChimLeft = w * 0.68;
+    final double pChimW = w * 0.12;
+    final double pChimRight = pChimLeft + pChimW;
+    final double pCapLeft = pChimLeft - 5;
+    final double pCapRight = pChimRight + 5;
+    final double pCapTop = 5.0; // Raised chimney
+    final double pCapBottom = 19.0;
+    final double pTrunkBottom = 90.0; // Extended deep into the roof to close any gaps
+    
+    final whiteChimney = Path();
+    whiteChimney.addRect(Rect.fromLTRB(
+      pChimLeft - bw, pCapBottom, pChimRight + bw, pTrunkBottom
+    ));
+    whiteChimney.addRRect(RRect.fromRectAndRadius(
+      Rect.fromLTRB(pCapLeft - bw, pCapTop - bw, pCapRight + bw, pCapBottom + bw),
+      Radius.circular(3 + bw),
+    ));
+
+    // 3. White House Body Background
+    final whiteHouse = Path();
+    // Fill the space all the way to the peak to avoid background showing through
+    whiteHouse.moveTo(0, wallY);
+    whiteHouse.lineTo(w / 2, peakY);
+    whiteHouse.lineTo(w, wallY);
+    whiteHouse.lineTo(w, h - cornerR);
+    whiteHouse.quadraticBezierTo(w, h, w - cornerR, h);
+    whiteHouse.lineTo(cornerR, h);
+    whiteHouse.quadraticBezierTo(0, h, 0, h - cornerR);
+    whiteHouse.close();
+
+    // Combine all to create one massive continuous white sticker silhouette!
+    Path silhouette = Path.combine(PathOperation.union, whiteHouse, whiteRoof);
+    silhouette = Path.combine(PathOperation.union, silhouette, whiteChimney);
+    return silhouette;
   }
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
+
+class _RoofPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    
+    // Geometry Constants
+    final double peakY = 22.0;
+    final double slope = 75.0 / (w / 2); // 75px drop over half width
+    
+    // Dark layer (Outer layer)
+    final double overhangX = -1.0; 
+    final double overhangY = peakY + (w / 2 - overhangX) * slope;
+    final Offset d0 = Offset(overhangX, overhangY);
+    final Offset d1 = Offset(w / 2, peakY);
+    final Offset d2 = Offset(w - overhangX, overhangY);
+    
+    // Light layer (Inner layer, shifted down to expose more thickness)
+    final double lX = 4.0; // Ends 4px inside the wall (wider than before, but shorter than dark layer)
+    final double lPeakY = peakY + 6.0; // Increased from 3.0 to 6.0 to make it thicker
+    final double lY = lPeakY + (w / 2 - lX) * slope;
+    final Offset l0 = Offset(lX, lY);
+    final Offset l1 = Offset(w / 2, lPeakY);
+    final Offset l2 = Offset(w - lX, lY);
+    
+    final double roofThick = 18.0;
+    
+    final double pChimLeft = w * 0.68;
+    final double pChimW = w * 0.12;
+    final double pChimRight = pChimLeft + pChimW;
+    final double pCapLeft = pChimLeft - 5;
+    final double pCapRight = pChimRight + 5;
+    final double pCapTop = 5.0; 
+    final double pCapBottom = 19.0;
+    final double pTrunkBottom = 90.0; // Extended deep into the roof
+    
+    // Matched Colors
+    final chimneyPaint = Paint()..color = const Color(0xFFC0A288); 
+    final capPaint = Paint()..color = const Color(0xFFAB8B73);     
+    
+    // 1. Draw Chimney First (so it tucks naturally behind/under the roof)
+    final double roofYAtLeft = peakY + (pChimLeft - w / 2) * slope;
+    final double roofYAtRight = peakY + (pChimRight - w / 2) * slope;
+
+    final chimneyPath = Path();
+    chimneyPath.moveTo(pChimLeft, pCapBottom);
+    chimneyPath.lineTo(pChimRight, pCapBottom);
+    chimneyPath.lineTo(pChimRight, roofYAtRight);
+    chimneyPath.lineTo(pChimLeft, roofYAtLeft);
+    chimneyPath.close();
+    
+    canvas.drawPath(chimneyPath, chimneyPaint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(pCapLeft, pCapTop, pCapRight, pCapBottom),
+        const Radius.circular(3),
+      ),
+      capPaint,
+    );
+
+    // 2. Draw Roof Layers
+    final lightPath = Path();
+    lightPath.moveTo(l0.dx, l0.dy);
+    lightPath.lineTo(l1.dx, l1.dy);
+    lightPath.lineTo(l2.dx, l2.dy);
+    
+    final darkPath = Path();
+    darkPath.moveTo(d0.dx, d0.dy);
+    darkPath.lineTo(d1.dx, d1.dy);
+    darkPath.lineTo(d2.dx, d2.dy);
+    
+    // Bottom Light Layer (Bevel effect)
+    final lightRoofPaint = Paint()
+      ..color = const Color(0xFFF0E0D0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = roofThick
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+      
+    // Top Dark Layer
+    final darkRoofPaint = Paint()
+      ..color = const Color(0xFFDCC8B6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = roofThick
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+      
+    // Draw light layer first. Because its lines are shorter (lX = 14.0), 
+    // it will be completely hidden under the dark layer at the edges!
+    canvas.drawPath(lightPath, lightRoofPaint);
+    
+    // Draw dark layer. It has longer lines (dX = 2.0), so it forms the protruding eave tips!
+    canvas.drawPath(darkPath, darkRoofPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Background Decorative Arcs (matching sticker corners)
@@ -1717,7 +1973,7 @@ class _SummaryRow extends StatelessWidget {
         _StatBox(
           label: 'الأيام',
           value: '${provider.completedDays}/100',
-          icon: Icons.calendar_today_outlined,
+          icon: Icons.calendar_month_outlined,
         ),
         const SizedBox(width: 8),
         _StatBox(
@@ -1750,25 +2006,45 @@ class _StatBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.borderLight, width: 1),
+          color: const Color(0xFFFAF3E8), // exact house sticker color
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A6B4E31), // subtle shadow for card pop
+              blurRadius: 10,
+              spreadRadius: 0,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: AppColors.textSecondary),
-            const SizedBox(height: 8),
+            Icon(icon, size: 28, color: Colors.black87),
+            const SizedBox(height: 12),
             Text(
               value,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                fontSize: 20, // slightly smaller
+
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF3A9855), // matching the vibrant green
+                height: 1.1,
+              ),
             ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7A7A7A), // neutral gray
+              ),
+            ),
           ],
         ),
       ),
