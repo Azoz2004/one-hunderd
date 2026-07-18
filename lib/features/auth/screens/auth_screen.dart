@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
@@ -365,14 +367,10 @@ class _Step1InfoPage extends StatelessWidget {
 
             // ── Logo + greeting (step 1 only) ──
             Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 100,
-                  width: 100,
-                  fit: BoxFit.cover,
-                ),
+              child: Image.asset(
+                'assets/images/Logo.png',
+                height: 80,
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(height: 14),
@@ -694,33 +692,24 @@ class _Step2StatusPage extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
+                onTap: () {
+                  final initialDate = selectedDate ?? DateTime(2000, 6, 15);
+                  DateTime tempDate = initialDate;
+
+                  showModalBottomSheet(
                     context: context,
-                    initialDate: selectedDate ?? DateTime(2000),
-                    firstDate: DateTime(1920),
-                    lastDate: DateTime.now(),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: const ColorScheme.light(
-                            primary: AppColors.charcoal,
-                            onPrimary: AppColors.white,
-                            onSurface: AppColors.charcoal,
-                          ),
-                          textButtonTheme: TextButtonThemeData(
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.charcoal,
-                            ),
-                          ),
-                        ),
-                        child: child!,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    builder: (BuildContext ctx) {
+                      return _CustomDatePickerModal(
+                        initialDate: initialDate,
+                        onConfirm: (date) {
+                          onSelectDate(date);
+                          Navigator.pop(ctx);
+                        },
                       );
                     },
                   );
-                  if (date != null) {
-                    onSelectDate(date);
-                  }
                 },
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
@@ -843,7 +832,7 @@ class _Step3GoalPage extends StatelessWidget {
                 decoration: InputDecoration(
                   prefixIcon: const Padding(
                     padding: EdgeInsets.all(12),
-                    child: Text('JD', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: Text('JD', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'sans-serif')),
                   ),
                   filled: true,
                   fillColor: AppColors.cardFill,
@@ -1157,6 +1146,233 @@ class _BottomNav extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Custom Date Picker ──────────────────────────────────────────────────────
+class _CustomDatePickerModal extends StatefulWidget {
+  final DateTime initialDate;
+  final ValueChanged<DateTime> onConfirm;
+
+  const _CustomDatePickerModal({
+    required this.initialDate,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_CustomDatePickerModal> createState() => _CustomDatePickerModalState();
+}
+
+class _CustomDatePickerModalState extends State<_CustomDatePickerModal> {
+  late int selectedYear;
+  late int selectedMonth;
+  late int selectedDay;
+
+  final int minYear = 1920;
+  final int maxYear = DateTime.now().year;
+
+  final List<String> monthNames = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+  ];
+
+  late FixedExtentScrollController yearController;
+  late FixedExtentScrollController monthController;
+  late FixedExtentScrollController dayController;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedYear = widget.initialDate.year;
+    selectedMonth = widget.initialDate.month;
+    selectedDay = widget.initialDate.day;
+
+    yearController = FixedExtentScrollController(initialItem: selectedYear - minYear);
+    monthController = FixedExtentScrollController(initialItem: selectedMonth - 1);
+    dayController = FixedExtentScrollController(initialItem: selectedDay - 1);
+  }
+
+  @override
+  void dispose() {
+    yearController.dispose();
+    monthController.dispose();
+    dayController.dispose();
+    super.dispose();
+  }
+
+  int getDaysInMonth(int year, int month) {
+    if (month == 2) {
+      return (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) ? 29 : 28;
+    }
+    const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return days[month - 1];
+  }
+
+  void updateDayController() {
+    int daysInCurrentMonth = getDaysInMonth(selectedYear, selectedMonth);
+    if (selectedDay > daysInCurrentMonth) {
+      setState(() {
+        selectedDay = daysInCurrentMonth;
+      });
+      dayController.jumpToItem(selectedDay - 1);
+    } else {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 320,
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'اختر تاريخ ميلادك',
+            style: GoogleFonts.tajawal(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.charcoal,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: Center(
+              child: SizedBox(
+                height: 120, // Exactly fits 3 items of 40px each (limits view to 1 above, 1 selected, 1 below)
+                child: Directionality(
+                  textDirection: TextDirection.ltr, // strictly LTR: Year(Left), Month(Center), Day(Right)
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Continuous selection overlay with borders
+                      Container(
+                        height: 40,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.borderLight.withOpacity(0.3),
+                          border: const Border(
+                            top: BorderSide(color: AppColors.border, width: 1.5),
+                            bottom: BorderSide(color: AppColors.border, width: 1.5),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          // Year (Left)
+                          Expanded(
+                            flex: 1,
+                            child: CupertinoPicker.builder(
+                              scrollController: yearController,
+                              itemExtent: 40,
+                              diameterRatio: 1.5,
+                              squeeze: 1.1,
+                              selectionOverlay: const SizedBox(), // custom overlay is drawn underneath
+                              onSelectedItemChanged: (index) {
+                                selectedYear = minYear + index;
+                                updateDayController();
+                              },
+                              childCount: maxYear - minYear + 1,
+                              itemBuilder: (context, index) {
+                                final isSelected = (minYear + index) == selectedYear;
+                                return Center(
+                                  child: Text(
+                                    '${minYear + index}',
+                                    style: GoogleFonts.tajawal(
+                                      fontSize: isSelected ? 20 : 16,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          // Month (Center)
+                          Expanded(
+                            flex: 2,
+                            child: CupertinoPicker.builder(
+                              scrollController: monthController,
+                              itemExtent: 40,
+                              diameterRatio: 1.5,
+                              squeeze: 1.1,
+                              selectionOverlay: const SizedBox(),
+                              onSelectedItemChanged: (index) {
+                                selectedMonth = index + 1;
+                                updateDayController();
+                              },
+                              childCount: 12,
+                              itemBuilder: (context, index) {
+                                final isSelected = (index + 1) == selectedMonth;
+                                return Center(
+                                  child: Text(
+                                    '${monthNames[index]} (${index + 1})',
+                                    style: GoogleFonts.tajawal(
+                                      fontSize: isSelected ? 18 : 15,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          // Day (Right)
+                          Expanded(
+                            flex: 1,
+                            child: CupertinoPicker.builder(
+                              scrollController: dayController,
+                              itemExtent: 40,
+                              diameterRatio: 1.5,
+                              squeeze: 1.1,
+                              selectionOverlay: const SizedBox(),
+                              onSelectedItemChanged: (index) {
+                                setState(() {
+                                  selectedDay = index + 1;
+                                });
+                              },
+                              childCount: getDaysInMonth(selectedYear, selectedMonth),
+                              itemBuilder: (context, index) {
+                                final isSelected = (index + 1) == selectedDay;
+                                return Center(
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: GoogleFonts.tajawal(
+                                      fontSize: isSelected ? 20 : 16,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: () {
+                widget.onConfirm(DateTime(selectedYear, selectedMonth, selectedDay));
+              },
+              child: const Text('تأكيد الاختيار', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             ),
           ),
         ],

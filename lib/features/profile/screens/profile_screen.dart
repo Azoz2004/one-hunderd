@@ -829,7 +829,7 @@ class _MiniStat extends StatelessWidget {
     child: Column(children: [
       Icon(icon, size: 20, color: iconColor),
       const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.charcoal)),
+      Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.charcoal, fontFamily: 'sans-serif')),
       const SizedBox(height: 2),
       Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary), textAlign: TextAlign.center),
     ]),

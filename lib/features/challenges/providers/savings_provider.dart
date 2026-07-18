@@ -8,7 +8,7 @@ import 'package:one_hunderd/features/challenges/models/deposit.dart';
 import 'package:one_hunderd/features/profile/models/user_profile.dart';
 import 'package:one_hunderd/core/services/notification_service.dart';
 import 'package:one_hunderd/features/challenges/services/challenge_service.dart';
-
+import 'package:one_hunderd/features/activities/models/activity_log.dart';
 
 // ─── SharedPrefs keys ─────────────────────────────────────────────────────────
 const _kUserProfile = 'user_profile_v1';
@@ -118,13 +118,14 @@ class SavingsProvider extends ChangeNotifier {
 
   UserProfile? get userProfile => _userProfile;
   bool get isLoggedIn => FirebaseAuth.instance.currentUser != null && _userProfile != null;
-  List<Deposit> get deposits => List.unmodifiable(_deposits);
+  List<Deposit> get deposits => List.unmodifiable(_deposits.where((d) => d.notes != 'lifebuoy'));
 
   /// All unique calendar dates that have at least one deposit, sorted ascending.
   List<DateTime> get uniqueDepositDates {
     final seen = <String>{};
     final dates = <DateTime>[];
     for (final d in _deposits) {
+      if (d.notes == 'lifebuoy') continue;
       final key = '${d.dateOnly.year}-${d.dateOnly.month}-${d.dateOnly.day}';
       if (seen.add(key)) {
         dates.add(d.dateOnly);
@@ -145,7 +146,7 @@ class SavingsProvider extends ChangeNotifier {
     final dates = uniqueDepositDates;
     if (dayNumber < 1 || dayNumber > dates.length) return [];
     final targetDate = dates[dayNumber - 1];
-    return _deposits.where((d) => d.dateOnly == targetDate).toList();
+    return _deposits.where((d) => d.dateOnly == targetDate && d.notes != 'lifebuoy').toList();
   }
 
   /// Get the calendar date for a specific grid day number.
@@ -174,33 +175,144 @@ class SavingsProvider extends ChangeNotifier {
   int get sharesDoneToday => _sharesDoneToday;
   int get avatarIndex => _avatarIndex;
 
-  /// Whether the streak is broken (missed more than 1 day)
-  bool get isStreakBroken {
-    if (_lastDepositDate == null || _currentStreak == 0) return false;
+  /// الفجوة بالأيام بين آخر إيداع (أو طوق) واليوم الحالي
+  int get daysSinceLastDeposit {
+    if (_lastDepositDate == null) return 0;
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
-    return todayOnly.difference(_lastDepositDate!).inDays > 1;
+    return todayOnly.difference(_lastDepositDate!).inDays;
+  }
+
+  /// تكلفة استخدام طوق النجاة بناءً على عدد الأيام الفائتة
+  /// gap=2 (فات يوم) → 1 طوق | gap=3 (فات يومان) → 2 طوق | غير ذلك → 0
+  int get lifebuoyCost {
+    final gap = daysSinceLastDeposit;
+    if (gap == 2) return 1;
+    if (gap == 3) return 2;
+    return 0;
+  }
+
+  /// أطول ستريك متواصل تاريخياً (محسوب من قائمة الإيداعات)
+  int get longestStreak {
+    if (_deposits.isEmpty) return _currentStreak;
+    final days = _deposits
+        .map((d) => DateTime(d.date.year, d.date.month, d.date.day))
+        .toSet()
+        .toList()
+      ..sort();
+    if (days.isEmpty) return _currentStreak;
+    int longest = 1;
+    int current = 1;
+    for (int i = 1; i < days.length; i++) {
+      if (days[i].difference(days[i - 1]).inDays == 1) {
+        current++;
+        if (current > longest) longest = current;
+      } else {
+        current = 1;
+      }
+    }
+    return longest > _currentStreak ? longest : _currentStreak;
+  }
+
+  /// نسبة الالتزام من تاريخ أول إيداع حتى اليوم (0.0–1.0)
+  double get commitmentRate {
+    if (_deposits.isEmpty) return 0.0;
+    final days = _deposits
+        .map((d) => DateTime(d.date.year, d.date.month, d.date.day))
+        .toSet()
+        .toList()
+      ..sort();
+    final firstDay = days.first;
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final totalDays = todayOnly.difference(firstDay).inDays + 1;
+    return totalDays > 0 ? days.length / totalDays : 0.0;
+  }
+
+  /// أيام التحدي التي يوجد فيها إيداع واحد على الأقل (للتقويم)
+  Set<DateTime> get depositDays => _deposits
+      .where((d) => d.notes != 'lifebuoy')
+      .map((d) => DateTime(d.date.year, d.date.month, d.date.day))
+      .toSet();
+
+  /// أيام التحدي التي تم حمايتها بطوق نجاة
+  Set<DateTime> get protectedDays => _deposits
+      .where((d) => d.notes == 'lifebuoy')
+      .map((d) => DateTime(d.date.year, d.date.month, d.date.day))
+      .toSet();
+
+  /// الستريك في خطر غير قابل للإنقاذ (gap >= 4)
+  bool get isStreakBroken {
+    if (_lastDepositDate == null || _currentStreak == 0) return false;
+    return daysSinceLastDeposit >= 4;
+  }
+
+  /// الستريك في خطر وقابل للإنقاذ (يومان أو ثلاثة بدون إيداع)
+  bool get isStreakInDanger {
+    if (_lastDepositDate == null || _currentStreak == 0) return false;
+    final gap = daysSinceLastDeposit;
+    return gap == 2 || gap == 3;
+  }
+
+  Future<void> _checkAndAutoResetStreak() async {
+    if (_currentStreak > 0 && _lastDepositDate != null && daysSinceLastDeposit >= 4) {
+      _currentStreak = 0;
+      await _persist();
+    }
   }
 
   int _calculateOldStreak() {
     if (_deposits.isEmpty) return 0;
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
-    final dateSet = <DateTime>{};
+
+    // Group deposits by date
+    final depositsByDate = <String, List<Deposit>>{};
     for (final d in _deposits) {
-      dateSet.add(d.dateOnly);
+      final key = '${d.dateOnly.year}-${d.dateOnly.month}-${d.dateOnly.day}';
+      depositsByDate.putIfAbsent(key, () => []).add(d);
     }
+
     DateTime checkDate = todayOnly;
-    if (!dateSet.contains(checkDate)) {
-      checkDate = checkDate.subtract(const Duration(days: 1));
-      if (!dateSet.contains(checkDate)) return 0;
+    final todayKey = '${todayOnly.year}-${todayOnly.month}-${todayOnly.day}';
+    
+    // If today has no deposits at all, we start checking from yesterday
+    if (!depositsByDate.containsKey(todayKey)) {
+      checkDate = todayOnly.subtract(const Duration(days: 1));
     }
+
     int streak = 0;
-    while (dateSet.contains(checkDate)) {
-      streak++;
+    while (true) {
+      final key = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
+      if (!depositsByDate.containsKey(key)) {
+        break; // No deposit and no lifebuoy on this day, streak breaks!
+      }
+      
+      final dayDeps = depositsByDate[key]!;
+      final isLifebuoyDay = dayDeps.every((d) => d.notes == 'lifebuoy');
+      
+      if (!isLifebuoyDay) {
+        streak++;
+      }
+      
       checkDate = checkDate.subtract(const Duration(days: 1));
     }
     return streak;
+  }
+
+  void _updateStreakAndLastDate() {
+    _currentStreak = _calculateOldStreak();
+    if (_deposits.isEmpty) {
+      _lastDepositDate = null;
+    } else {
+      DateTime? maxDate;
+      for (final d in _deposits) {
+        if (maxDate == null || d.dateOnly.isAfter(maxDate)) {
+          maxDate = d.dateOnly;
+        }
+      }
+      _lastDepositDate = maxDate;
+    }
   }
 
   /// Whether the challenge is complete (100 unique days).
@@ -405,16 +517,9 @@ class SavingsProvider extends ChangeNotifier {
           } catch (_) {}
         }
 
-        _currentStreak = sessionData['currentStreak'] as int? ?? 0;
+        _updateStreakAndLastDate();
         _lifebuoys = sessionData['lifebuoys'] as int? ?? 0;
         _woodenCoins = sessionData['woodenCoins'] as int? ?? 0;
-
-        final lastDateStr = sessionData['lastDepositDate'] as String?;
-        if (lastDateStr != null) {
-          _lastDepositDate = DateTime.tryParse(lastDateStr);
-        } else {
-          _lastDepositDate = null;
-        }
 
         final completedAtTs = sessionData['completedAt'] as Timestamp?;
         if (completedAtTs != null) {
@@ -425,6 +530,7 @@ class SavingsProvider extends ChangeNotifier {
       }
       
       _startFriendsListeners(user.uid);
+      await _checkAndAutoResetStreak();
       notifyListeners();
       return;
     } else {
@@ -471,19 +577,13 @@ class SavingsProvider extends ChangeNotifier {
       }
     }
 
-    // Migrate old streak logic if needed
-    if (data['current_streak_v1'] == null && _deposits.isNotEmpty) {
-      _currentStreak = _calculateOldStreak();
-      final dates = uniqueDepositDates;
-      _lastDepositDate = dates.isNotEmpty ? dates.last : null;
-      await _persist();
-    }
+    _updateStreakAndLastDate();
+    await _checkAndAutoResetStreak();
 
-    // Migrate completedAt if missing for completed users
     if (isComplete && _completedAt == null) {
       _completedAt = _lastDepositDate ?? DateTime.now();
-      await _persist();
     }
+    await _persist();
 
     _startFriendsListeners(user.uid);
     notifyListeners();
@@ -602,8 +702,7 @@ class SavingsProvider extends ChangeNotifier {
           } catch (_) {}
         }
 
-        // Parse shared statistics
-        _currentStreak = data['currentStreak'] as int? ?? 0;
+        _updateStreakAndLastDate();
         _lifebuoys = data['lifebuoys'] as int? ?? 0;
         _woodenCoins = data['woodenCoins'] as int? ?? 0;
 
@@ -634,13 +733,6 @@ class SavingsProvider extends ChangeNotifier {
               }
             });
           }
-        }
-
-        final lastDateStr = data['lastDepositDate'] as String?;
-        if (lastDateStr != null) {
-          _lastDepositDate = DateTime.tryParse(lastDateStr);
-        } else {
-          _lastDepositDate = null;
         }
 
         final completedAtTs = data['completedAt'] as Timestamp?;
@@ -917,6 +1009,12 @@ class SavingsProvider extends ChangeNotifier {
         'createdAt': FieldValue.serverTimestamp(),
       },
     }, SetOptions(merge: true));
+    
+    await _logActivity(
+      type: ActivityType.separatePartner,
+      title: 'طلب انفصال',
+      description: 'لقد قمت بإرسال طلب انفصال عن التحدي التعاوني',
+    );
   }
 
   /// The partner rejects the separation request.
@@ -986,6 +1084,12 @@ class SavingsProvider extends ChangeNotifier {
       }, SetOptions(merge: true));
 
       await ChallengeService.dissolveChallengeInvitations(myUid, _partnerUid!);
+
+      await _logActivity(
+        type: ActivityType.separatePartner,
+        title: 'قبول الانفصال',
+        description: 'لقد وافقت على طلب الانفصال وعدت للتحدي الفردي',
+      );
 
       await FirebaseFirestore.instance
           .collection('competitive_sessions')
@@ -1213,6 +1317,11 @@ class SavingsProvider extends ChangeNotifier {
         .update({'wooden_coins_v1': _woodenCoins}).catchError((_) {});
 
     notifyListeners();
+    await _logActivity(
+      type: ActivityType.pokePartner,
+      title: 'إرسال نكزة',
+      description: 'تم إرسال نكزة للخصم بقيمة 10 عملات',
+    );
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -1251,6 +1360,7 @@ class SavingsProvider extends ChangeNotifier {
     final updatedContact = (newEmail != null && newEmail.isNotEmpty) ? newEmail : _userProfile!.contact;
 
     // 2. Update local state
+    final oldProfile = _userProfile!;
     _userProfile = UserProfile(
       fullName: _userProfile!.fullName,
       gender: _userProfile!.gender,
@@ -1265,6 +1375,47 @@ class SavingsProvider extends ChangeNotifier {
     
     // 3. Persist to Firestore
     await _persist();
+    
+    // Check what changed and log it
+    final changesOld = <String>[];
+    final changesNew = <String>[];
+    
+    if (oldProfile.contact != updatedContact) {
+      changesOld.add('الإيميل: ${oldProfile.contact}');
+      changesNew.add('الإيميل: $updatedContact');
+    }
+    if (newPassword != null && newPassword.isNotEmpty) {
+      changesOld.add('الرمز السري: ******');
+      changesNew.add('الرمز السري: ******');
+    }
+    if (oldProfile.financialGoal != updatedFinancialGoal) {
+      changesOld.add('الهدف المالي: ${oldProfile.financialGoal.toStringAsFixed(2)} JD');
+      changesNew.add('الهدف المالي: ${updatedFinancialGoal.toStringAsFixed(2)} JD');
+    }
+    if (oldProfile.birthDate != updatedBirthDate) {
+      final oldDateStr = oldProfile.birthDate != null ? "${oldProfile.birthDate!.year}-${oldProfile.birthDate!.month.toString().padLeft(2, '0')}-${oldProfile.birthDate!.day.toString().padLeft(2, '0')}" : "غير محدد";
+      final newDateStr = updatedBirthDate != null ? "${updatedBirthDate.year}-${updatedBirthDate.month.toString().padLeft(2, '0')}-${updatedBirthDate.day.toString().padLeft(2, '0')}" : "غير محدد";
+      changesOld.add('تاريخ الميلاد: $oldDateStr');
+      changesNew.add('تاريخ الميلاد: $newDateStr');
+    }
+    if (oldProfile.maritalStatus != updatedMaritalStatus) {
+      changesOld.add('الحالة الاجتماعية: ${oldProfile.maritalStatus}');
+      changesNew.add('الحالة الاجتماعية: $updatedMaritalStatus');
+    }
+    if (oldProfile.goal != updatedGoal) {
+      changesOld.add('الهدف الأساسي: ${oldProfile.goal}');
+      changesNew.add('الهدف الأساسي: $updatedGoal');
+    }
+
+    if (changesOld.isNotEmpty) {
+      await _logActivity(
+        type: ActivityType.updateProfile,
+        title: 'تعديل بيانات الحساب',
+        description: 'تم تعديل بيانات الحساب',
+        oldValue: changesOld.join('|'),
+        newValue: changesNew.join('|'),
+      );
+    }
     
     // 4. Sync with partner if in cooperative mode
     if (isCooperativeMode && _activeSessionId != null && _partnerUid != null) {
@@ -1349,20 +1500,6 @@ class SavingsProvider extends ChangeNotifier {
       }
     }
 
-    if (_lastDepositDate == null) {
-      _currentStreak = 1;
-    } else {
-      final diff = todayOnly.difference(_lastDepositDate!).inDays;
-      if (diff == 1) {
-        _currentStreak += 1;
-      } else if (diff > 1) {
-        // Missed days, streak resets to 1 (lifebuoy wasn't used)
-        _currentStreak = 1;
-      }
-      // If diff == 0, it's the same day, streak doesn't increase.
-    }
-    _lastDepositDate = todayOnly;
-
     final user = FirebaseAuth.instance.currentUser;
     final uid = user?.uid;
 
@@ -1373,8 +1510,17 @@ class SavingsProvider extends ChangeNotifier {
       depositedBy: isCooperativeMode ? uid : null,
     );
     _deposits.add(deposit);
+
+    _updateStreakAndLastDate();
+
     notifyListeners();
     await _persist(newDeposit: deposit);
+
+    await _logActivity(
+      type: ActivityType.deposit,
+      title: 'إيداع جديد',
+      description: 'تم إيداع مبلغ ${amount.toStringAsFixed(2)} JD${notes != null && notes.isNotEmpty ? ' - $notes' : ''}',
+    );
 
     // ─ حماية من التلاعب بالوقت: حفظ Server Timestamp في Firestore ─
     // يُستخدم هذا الحقل للتحقق المستقبلي من صحة التواريخ
@@ -1418,33 +1564,81 @@ class SavingsProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _persist();
+
+    final changesOld = <String>[];
+    final changesNew = <String>[];
+
+    if (oldDeposit.amount != amount) {
+      changesOld.add('المبلغ: ${oldDeposit.amount.toStringAsFixed(2)} JD');
+      changesNew.add('المبلغ: ${amount.toStringAsFixed(2)} JD');
+    }
+    
+    final oldNotes = oldDeposit.notes ?? '';
+    final newNotes = notes ?? '';
+    if (oldNotes != newNotes) {
+      changesOld.add('الملاحظات: ${oldNotes.isEmpty ? "لا يوجد" : oldNotes}');
+      changesNew.add('الملاحظات: ${newNotes.isEmpty ? "لا يوجد" : newNotes}');
+    }
+
+    if (changesOld.isNotEmpty) {
+      await _logActivity(
+        type: ActivityType.updateDeposit,
+        title: 'تعديل الإيداع',
+        description: 'تم تعديل تفاصيل الإيداع',
+        oldValue: changesOld.join('|'),
+        newValue: changesNew.join('|'),
+      );
+    }
   }
 
   Future<void> deleteDeposit(String id) async {
     _deposits.removeWhere((d) => d.id == id);
-    if (_deposits.isEmpty) {
-      _currentStreak = 0;
-      _lastDepositDate = null;
-    } else {
-      _currentStreak = _calculateOldStreak();
-      final dates = uniqueDepositDates;
-      _lastDepositDate = dates.isNotEmpty ? dates.last : null;
-    }
+    _updateStreakAndLastDate();
     notifyListeners();
     await _persist();
+    await _logActivity(
+      type: ActivityType.deleteDeposit,
+      title: 'حذف إيداع',
+      description: 'تم حذف عملية الإيداع المحددة',
+    );
   }
 
   Future<void> useLifebuoy() async {
-    if (_lifebuoys <= 0) return;
-    _lifebuoys -= 1;
-    _lifebuoysUsed += 1;
+    final cost = lifebuoyCost;
+    if (cost == 0) return;          // لا حاجة للطوق أو الستريك منتهٍ
+    if (_lifebuoys < cost) return;  // أطواق غير كافية
+    _lifebuoys -= cost;
+    _lifebuoysUsed += cost;
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
-    
-    // Fake the last deposit to be yesterday to resume the streak
-    _lastDepositDate = todayOnly.subtract(const Duration(days: 1));
+
+    // إضافة إيداعات وهمية لتسجيل الأيام التي تمت حمايتها بطوق النجاة
+    final gap = daysSinceLastDeposit;
+    if (gap >= 2) {
+      final savedDate1 = todayOnly.subtract(const Duration(days: 1));
+      _deposits.add(Deposit(
+        amount: 0.0,
+        date: savedDate1,
+        notes: 'lifebuoy',
+      ));
+      if (gap == 3) {
+        final savedDate2 = todayOnly.subtract(const Duration(days: 2));
+        _deposits.add(Deposit(
+          amount: 0.0,
+          date: savedDate2,
+          notes: 'lifebuoy',
+        ));
+      }
+    }
+
+    _updateStreakAndLastDate();
     notifyListeners();
     await _persist();
+    await _logActivity(
+      type: ActivityType.useLifebuoy,
+      title: 'استخدام طوق النجاة',
+      description: 'تم استخدام $cost طوق نجاة لإنقاذ السلسلة من الكسر',
+    );
   }
 
   Future<void> resetStreak() async {
@@ -1475,6 +1669,9 @@ class SavingsProvider extends ChangeNotifier {
 
   Future<void> updateFinancialGoal(double goal) async {
     if (_userProfile != null) {
+      final oldGoal = _userProfile!.financialGoal;
+      if (oldGoal == goal) return; // No change
+
       _userProfile!.financialGoal = goal;
       notifyListeners();
       await _persist();
@@ -1492,6 +1689,14 @@ class SavingsProvider extends ChangeNotifier {
         );
         batch.commit().catchError((_) {});
       }
+      
+      await _logActivity(
+        type: ActivityType.updateGoal,
+        title: 'تحديث الهدف المالي',
+        description: 'تم تحديث الهدف المالي',
+        oldValue: '${oldGoal.toStringAsFixed(2)} JD',
+        newValue: '${goal.toStringAsFixed(2)} JD',
+      );
     }
   }
 
@@ -1514,6 +1719,11 @@ class SavingsProvider extends ChangeNotifier {
     _lastDailyClaimDate = todayStr;
     notifyListeners();
     await _persist();
+    await _logActivity(
+      type: ActivityType.claimCoins,
+      title: 'المكافأة اليومية',
+      description: 'حصلت على 10 عملات خشبية',
+    );
   }
 
   Future<void> watchAdReward() async {
@@ -1524,6 +1734,11 @@ class SavingsProvider extends ChangeNotifier {
     _adsWatchedToday += 1;
     notifyListeners();
     await _persist();
+    await _logActivity(
+      type: ActivityType.watchAd,
+      title: 'مشاهدة إعلان',
+      description: 'حصلت على 25 عملة خشبية',
+    );
   }
 
   Future<bool> registerShareReward() async {
@@ -1534,6 +1749,11 @@ class SavingsProvider extends ChangeNotifier {
     _sharesDoneToday += 1;
     notifyListeners();
     await _persist();
+    await _logActivity(
+      type: ActivityType.claimCoins,
+      title: 'مشاركة التطبيق',
+      description: 'حصلت على 20 عملة خشبية',
+    );
     return true;
   }
 
@@ -1542,6 +1762,11 @@ class SavingsProvider extends ChangeNotifier {
       _lifebuoys += 1;
       notifyListeners();
       await _persist();
+      await _logActivity(
+        type: ActivityType.buyLifebuoy,
+        title: 'شراء طوق نجاة',
+        description: 'تم شراء طوق نجاة مقابل 1000 عملة',
+      );
     } else {
       throw Exception('ليس لديك عملات كافية!');
     }
@@ -1571,6 +1796,7 @@ class SavingsProvider extends ChangeNotifier {
   }
 
   Future<void> updateProfile(UserProfile profile) async {
+    final oldProfile = _userProfile;
     _userProfile = profile;
     notifyListeners();
     await _persist();
@@ -1589,6 +1815,44 @@ class SavingsProvider extends ChangeNotifier {
           {'cooperativePartnerName': profile.fullName}
         );
         batch.commit().catchError((_) {});
+      }
+    }
+
+    if (oldProfile != null) {
+      final changesOld = <String>[];
+      final changesNew = <String>[];
+
+      if (oldProfile.fullName != profile.fullName) {
+        changesOld.add('الاسم: ${oldProfile.fullName}');
+        changesNew.add('الاسم: ${profile.fullName}');
+      }
+      if (oldProfile.birthDate != profile.birthDate) {
+        final oldDateStr = oldProfile.birthDate != null ? "${oldProfile.birthDate!.year}-${oldProfile.birthDate!.month.toString().padLeft(2, '0')}-${oldProfile.birthDate!.day.toString().padLeft(2, '0')}" : "غير محدد";
+        final newDateStr = profile.birthDate != null ? "${profile.birthDate!.year}-${profile.birthDate!.month.toString().padLeft(2, '0')}-${profile.birthDate!.day.toString().padLeft(2, '0')}" : "غير محدد";
+        changesOld.add('تاريخ الميلاد: $oldDateStr');
+        changesNew.add('تاريخ الميلاد: $newDateStr');
+      }
+      if (oldProfile.maritalStatus != profile.maritalStatus) {
+        changesOld.add('الحالة الاجتماعية: ${oldProfile.maritalStatus}');
+        changesNew.add('الحالة الاجتماعية: ${profile.maritalStatus}');
+      }
+      if (oldProfile.goal != profile.goal) {
+        changesOld.add('الهدف الأساسي: ${oldProfile.goal}');
+        changesNew.add('الهدف الأساسي: ${profile.goal}');
+      }
+      if (oldProfile.challengeType != profile.challengeType) {
+        changesOld.add('نوع التحدي: ${oldProfile.challengeType}');
+        changesNew.add('نوع التحدي: ${profile.challengeType}');
+      }
+
+      if (changesOld.isNotEmpty) {
+        await _logActivity(
+          type: ActivityType.updateProfile,
+          title: 'تعديل الملف الشخصي',
+          description: 'تم تعديل بيانات الملف الشخصي',
+          oldValue: changesOld.join('|'),
+          newValue: changesNew.join('|'),
+        );
       }
     }
   }
@@ -1820,5 +2084,39 @@ class SavingsProvider extends ChangeNotifier {
     _cooperativeSessionsListener = null;
     _challengeInvitationsSubscription = null;
     _notifiedAcceptedRequestIds.clear();
+  }
+
+  Future<void> _logActivity({
+    required ActivityType type,
+    required String title,
+    required String description,
+    String? oldValue,
+    String? newValue,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('activities')
+          .doc();
+          
+      final log = ActivityLog(
+        id: docRef.id,
+        uid: uid,
+        type: type,
+        title: title,
+        description: description,
+        timestamp: DateTime.now(),
+        oldValue: oldValue,
+        newValue: newValue,
+      );
+      
+      await docRef.set(log.toMap());
+    } catch (e) {
+      debugPrint('Failed to log activity: $e');
+    }
   }
 }

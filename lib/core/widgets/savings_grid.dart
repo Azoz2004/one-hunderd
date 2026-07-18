@@ -3,11 +3,13 @@ import 'day_cell.dart';
 
 /// A responsive 10×10 grid displaying all 100 days of the challenge.
 class SavingsGrid extends StatelessWidget {
-  const SavingsGrid({super.key});
+  final int animationTrigger;
+  const SavingsGrid({super.key, required this.animationTrigger});
 
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
+      key: ValueKey<int>(animationTrigger),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

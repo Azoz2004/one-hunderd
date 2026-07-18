@@ -877,188 +877,243 @@ String _todayKey() {
 // ─── Lifebuoy System ──────────────────────────────────────────────────────────
 
 Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = false}) async {
-  final provider = context.read<SavingsProvider>();
-  
-  if (manualTrigger && !provider.isStreakBroken) {
-    AppSnackbar.show(
-      context: context,
-      message: 'الستريك الخاص بك بأمان حالياً! 🔥 لا تحتاج لاستخدام طوق نجاة.',
-      isSuccess: false,
-      isInfo: true,
-    );
-    if (provider.lifebuoys > 0) return;
-  }
-
   await showDialog<void>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (ctx) {
-      final hasLifebuoy = provider.lifebuoys > 0;
-      
-      return Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        backgroundColor: AppColors.white,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.support, size: 64, color: Colors.deepOrangeAccent),
-                const SizedBox(height: 16),
-                Text(
-                  hasLifebuoy ? 'إنقاذ الستريك!' : 'نفذت أطواق النجاة',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.charcoal,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  hasLifebuoy
-                      ? 'هل تريد استخدام طوق نجاة لإنقاذ الستريك؟'
-                      : 'ليس لديك أطواق نجاة. هل تريد شراء طوق مقابل 1000 قطعة خشبية؟',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                if (hasLifebuoy)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            Navigator.of(ctx).pop();
-                            if (!manualTrigger) {
-                              await provider.resetStreak();
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            side: const BorderSide(color: AppColors.borderLight),
+      return Consumer<SavingsProvider>(
+        builder: (context, provider, child) {
+          final cost = provider.lifebuoyCost;
+          final hasEnoughToUse = cost > 0 && provider.lifebuoys >= cost;
+          final isDanger = provider.isStreakInDanger;
+
+          String statusText = '';
+          if (isDanger) {
+            final costLabel = cost == 1 ? 'طوق واحد' : 'طوقين';
+            statusText = 'الستريك الخاص بك في خطر! تحتاج إلى استخدام $costLabel لإنقاذه.';
+          } else {
+            statusText = 'الستريك الخاص بك بأمان حالياً.';
+          }
+
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              backgroundColor: AppColors.white,
+              child: Stack(
+                children: [
+                  // محتوى الديالوج الرئيسي
+                  SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            'assets/images/Lifebuoy.png',
+                            height: 72,
+                            fit: BoxFit.contain,
                           ),
-                          child: const Text(
-                            'لا، شكراً',
-                            style: TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(ctx).pop();
-                            await provider.useLifebuoy();
-                            if (context.mounted) {
-                              AppSnackbar.show(
-                                context: context,
-                                message: 'تم إنقاذ الستريك بنجاح! 🛟',
-                                isSuccess: true,
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepOrangeAccent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'طوق النجاة',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.charcoal,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Tajawal',
                             ),
                           ),
-                          child: const Text('استخدام الطوق', style: TextStyle(fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            Navigator.of(ctx).pop();
-                            if (!manualTrigger) {
-                              await provider.resetStreak();
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                          const SizedBox(height: 12),
+                          Text(
+                            statusText,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 15,
+                              fontFamily: 'Tajawal',
                             ),
-                            side: const BorderSide(color: AppColors.borderLight),
                           ),
-                          child: const Text(
-                            'إلغاء',
-                            style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
+                          const SizedBox(height: 16),
+                          // معلومات الرصيد والأطواق
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardFill,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'أطواق النجاة المتبقية:',
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 13,
+                                        color: AppColors.charcoal,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${provider.lifebuoys} 🛟',
+                                      style: const TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.charcoal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 12, color: AppColors.borderLight),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'العملات الخشبية المتوفرة:',
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 13,
+                                        color: AppColors.charcoal,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${provider.woodenCoins} 🪙',
+                                      style: const TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.charcoal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(ctx).pop();
-                            try {
-                              await provider.buyLifebuoy();
-                              if (!manualTrigger) {
-                                await provider.useLifebuoy();
-                                if (context.mounted) {
-                                  AppSnackbar.show(
-                                    context: context,
-                                    message: 'تم شراء طوق نجاة واستخدامه لإنقاذ الستريك! 🛟🔥',
-                                    isSuccess: true,
-                                  );
+                          const SizedBox(height: 20),
+                          // زر شراء طوق إضافي
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                try {
+                                  await provider.buyLifebuoy();
+                                  if (ctx.mounted) {
+                                    AppSnackbar.show(
+                                      context: ctx,
+                                      message: 'تم شراء طوق نجاة بنجاح! 🛟',
+                                      isSuccess: true,
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    AppSnackbar.show(
+                                      context: ctx,
+                                      message: e.toString().replaceAll('Exception: ', ''),
+                                      isSuccess: false,
+                                    );
+                                  }
                                 }
-                              } else {
-                                if (context.mounted) {
-                                  AppSnackbar.show(
-                                    context: context,
-                                    message: 'تم شراء طوق نجاة بنجاح! 🛟',
-                                    isSuccess: true,
-                                  );
-                                }
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                AppSnackbar.show(
-                                  context: context,
-                                  message: e.toString().replaceAll('Exception: ', ''),
-                                  isSuccess: false,
-                                );
-                              }
-                              if (!manualTrigger) {
-                                await provider.resetStreak();
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.charcoal,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.charcoal,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'شراء',
+                                    style: TextStyle(
+                                      fontFamily: 'Tajawal',
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        '1000 🪙',
+                                        style: TextStyle(
+                                          fontFamily: 'Tajawal',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Icon(Icons.shopping_cart_rounded, size: 18),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          child: const Text('شراء الطوق', style: TextStyle(fontWeight: FontWeight.w700)),
-                        ),
+                          const SizedBox(height: 12),
+                          // زر الاستخدام (طويل وعريض بكامل العرض)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: hasEnoughToUse
+                                  ? () async {
+                                      Navigator.of(ctx).pop();
+                                      await provider.useLifebuoy();
+                                      if (context.mounted) {
+                                        AppSnackbar.show(
+                                          context: context,
+                                          message: 'تم إنقاذ الستريك بنجاح! 🛟',
+                                          isSuccess: true,
+                                        );
+                                      }
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrangeAccent,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: AppColors.borderLight,
+                                disabledForegroundColor: AppColors.textSecondary.withValues(alpha: 0.5),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: Text(
+                                cost > 0 ? 'استخدام ($cost)' : 'استخدام',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-              ],
+                  // زر X للإغلاق في الزاوية العلوية
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton(
+                      icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
     },
   );

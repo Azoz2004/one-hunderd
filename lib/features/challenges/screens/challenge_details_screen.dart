@@ -47,22 +47,19 @@ class ChallengeDetailsScreen extends StatelessWidget {
     final financialGoal = provider.userProfile?.financialGoal ?? 5050.0;
     final goalProgress = (financialGoal > 0 ? (totalSaved / financialGoal).clamp(0.0, 1.0) : 0.0);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('تفاصيل التحدي التعاوني', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        centerTitle: false,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
         backgroundColor: AppColors.background,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
+        appBar: AppBar(
+          title: const Text('تفاصيل التحدي التعاوني', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.charcoal, fontFamily: 'Tajawal')),
+          centerTitle: false,
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          titleSpacing: 0,
+          leading: const BackButton(color: AppColors.charcoal),
         ),
-      ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: CustomScrollView(
+        body: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -96,12 +93,12 @@ class ChallengeDetailsScreen extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             '${totalSaved.toStringAsFixed(2)} JD',
-                            style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
+                            style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, fontFamily: 'sans-serif'),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'الهدف: ${financialGoal.toStringAsFixed(2)} JD',
-                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                            style: const TextStyle(color: Colors.white70, fontSize: 14, fontFamily: 'sans-serif'),
                           ),
                           const SizedBox(height: 16),
                           ClipRRect(
@@ -271,7 +268,7 @@ class _ContributorCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${contribution.toStringAsFixed(2)} JD',
-            style: const TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.w900, fontSize: 16),
+            style: const TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.w900, fontSize: 16, fontFamily: 'sans-serif'),
           ),
         ],
       ),

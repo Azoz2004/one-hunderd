@@ -10,50 +10,177 @@ import 'package:one_hunderd/core/theme/app_theme.dart';
 /// Unpaid: thin-bordered circle with day number.
 /// Paid: green circle with white checkmark.
 /// Tapping a paid cell shows a bottom sheet listing all deposits for that day.
-class DayCell extends StatelessWidget {
+class DayCell extends StatefulWidget {
   final int dayNumber;
 
   const DayCell({super.key, required this.dayNumber});
 
   @override
+  State<DayCell> createState() => _DayCellState();
+}
+
+class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
+  late final AnimationController _scaleController;
+  late final Animation<double> _scaleAnimation;
+  bool _animateComplete = false;
+  bool _hasStartedInitialAnimation = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _scaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800), // تبطئة الأنيميشن قليلاً ليكون أكثر جاذبية
+    );
+
+    // تأثير تكبير وتصغير (الخلية بالكامل تكبر إلى 1.3 ثم ترتد وتستقر عند 1.08)
+    _scaleAnimation = TweenSequence<double>(
+      [
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.0, end: 1.3).chain(CurveTween(curve: Curves.easeOutCubic)),
+          weight: 35,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.3, end: 1.08).chain(CurveTween(curve: Curves.elasticOut)),
+          weight: 65,
+        ),
+      ],
+    ).animate(_scaleController);
+
+    final provider = context.read<SavingsProvider>();
+    final completed = provider.isDayCompleted(widget.dayNumber);
+
+    if (completed) {
+      _hasStartedInitialAnimation = true;
+      // تأثير تدريجي متتابع عند فتح الشاشة
+      final delayMs = 250 + (widget.dayNumber * 22); // زيادة خطوة التأخير إلى 22ms لتبطئة تتابع ظهور الخلايا
+      Future.delayed(Duration(milliseconds: delayMs), () {
+        if (mounted) {
+          setState(() {
+            _animateComplete = true;
+          });
+          _scaleController.forward(from: 0.0);
+        }
+      });
+    } else {
+      _animateComplete = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _scaleController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<SavingsProvider>();
-    final completed = provider.isDayCompleted(dayNumber);
+    final completed = provider.isDayCompleted(widget.dayNumber);
+
+    if (completed && !_animateComplete) {
+      if (!_hasStartedInitialAnimation) {
+        _hasStartedInitialAnimation = true;
+        // تأخير الأنيميشن عند إضافة عملية إدخار جديدة للسماح للـ Bottom Sheet بالإغلاق أولاً
+        Future.delayed(const Duration(milliseconds: 700), () {
+          if (mounted) {
+            setState(() {
+              _animateComplete = true;
+            });
+            _scaleController.forward(from: 0.0);
+          }
+        });
+      }
+    } else if (!completed && _animateComplete) {
+      _animateComplete = false;
+      _hasStartedInitialAnimation = false;
+      _scaleController.reverse();
+    }
+
+    final visualCompleted = _animateComplete;
 
     return GestureDetector(
       onTap: completed ? () => _showDetails(context, provider) : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        margin: const EdgeInsets.all(1.5),
-        decoration: BoxDecoration(
-          color: completed ? AppColors.green : Colors.transparent,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: completed ? AppColors.green : const Color(0xFFC0B8AD), // darker border for uncompleted (warm gray)
-            width: 1.2,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.all(1.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // Neumorphic Engraving + Inner Glow
+            gradient: visualCompleted
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    stops: [0.0, 0.5, 1.0],
+                    colors: [
+                      Color(0xFFC8B59C), // Dark shadow top-left (makes it look pressed in)
+                      Color(0xFFFFF7CC), // Soft golden glow inside the circle
+                      Color(0xFFFFFFFF), // Highlight bottom-right (edge catching light)
+                    ],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.transparent,
+                      Colors.transparent,
+                    ],
+                  ),
+            border: Border.all(
+              color: visualCompleted ? const Color(0xFFA58D6D) : const Color(0xFFC0B8AD), // Lighter border than before, still darker than uncompleted
+              width: visualCompleted ? 1.5 : 1.2,
+            ),
+            boxShadow: visualCompleted
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFFC107).withValues(alpha: 0.08),
+                      blurRadius: 3,
+                      spreadRadius: 0,
+                    ),
+                  ]
+                : [],
           ),
-        ),
-        child: Center(
-          child: completed
-              ? const Icon(Icons.check_rounded, color: AppColors.white, size: 14)
-              : FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 2.5, left: 1.5, right: 1.5), // Center vertically, prevent touching edges
-                    child: Text(
-                      '$dayNumber',
-                      maxLines: 1,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF4A3E30), // even darker warm brown
-                        fontSize: 12.5, // slightly reduced to prevent extreme scaling for 100
-                        fontWeight: FontWeight.w800, // bolder text
-                        height: 1.0, // force compact line height
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2.5, left: 1.5, right: 1.5),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  transitionBuilder: (child, animation) {
+                    return ScaleTransition(
+                      scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
                       ),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    '${widget.dayNumber}',
+                    key: ValueKey<bool>(visualCompleted),
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF4A3E30), // Original dark brown
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -61,9 +188,9 @@ class DayCell extends StatelessWidget {
 
   void _showDetails(BuildContext context, SavingsProvider provider) {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
-    final deposits = provider.getDepositsForDay(dayNumber);
-    final calendarDate = provider.getDateForDay(dayNumber);
-    final dayTotal = provider.totalForDay(dayNumber);
+    final deposits = provider.getDepositsForDay(widget.dayNumber);
+    final calendarDate = provider.getDateForDay(widget.dayNumber);
+    final dayTotal = provider.totalForDay(widget.dayNumber);
 
     // تنسيق التاريخ بالعربية
     String formatDate(DateTime d) {
@@ -129,7 +256,7 @@ class DayCell extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'اليوم $dayNumber',
+                      'اليوم ${widget.dayNumber}',
                       style: Theme.of(ctx).textTheme.headlineMedium,
                     ),
                     if (calendarDate != null)
@@ -145,6 +272,7 @@ class DayCell extends StatelessWidget {
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.green,
+                        fontFamily: 'sans-serif',
                       ),
                 ),
               ],
@@ -182,6 +310,7 @@ class DayCell extends StatelessWidget {
                                     '${dep.amount.toStringAsFixed(2)} JD',
                                     style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
                                           fontWeight: FontWeight.w600,
+                                          fontFamily: 'sans-serif',
                                         ),
                                   ),
                                   if (provider.isCooperativeMode && dep.depositedBy != null) ...[
@@ -273,9 +402,11 @@ class DayCell extends StatelessWidget {
             TextField(
               controller: amountController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              maxLength: 5,
               decoration: const InputDecoration(
                 labelText: 'المبلغ',
                 border: OutlineInputBorder(),
+                counterText: '',
               ),
             ),
             const SizedBox(height: 12),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
 import 'package:one_hunderd/features/challenges/widgets/gamification_dialogs.dart';
+import 'package:one_hunderd/features/home/screens/streak_details_screen.dart';
 
 /// Two side-by-side cards matching the sticker reference design.
 class StreakCard extends StatelessWidget {
@@ -30,9 +31,17 @@ class StreakCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: _StreakHalfCard(
-              streak: streak,
-              subtitleText: streakSubtitle,
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const StreakDetailsScreen(),
+                ),
+              ),
+              child: _StreakHalfCard(
+                streak: streak,
+                subtitleText: streakSubtitle,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -72,8 +81,8 @@ class _StreakHalfCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg    = Color(0xFFFFF8EE);
-    const borderClr = Color(0xFFEDE0CB);
+    const cardBg    = Color(0xFFFAF7F2);
+    const borderClr = Colors.white;
     // Darker, more readable text colors
     const labelClr  = Color(0xFF6B5234);   // dark warm brown (was 9C836A)
     const numClr    = Color(0xFFE07820);   // vibrant orange
@@ -83,7 +92,7 @@ class _StreakHalfCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderClr, width: 1),
+        border: Border.all(color: borderClr, width: 2),
         boxShadow: _cardShadow,
       ),
       child: Stack(
@@ -223,69 +232,70 @@ class _LifebuoyHalfCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg    = Color(0xFFFFF8EE);
-    const borderClr = Color(0xFFEDE0CB);
+    const cardBg    = Color(0xFFFAF7F2);
+    const borderClr = Colors.white;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // squeezed vertical padding
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderClr, width: 1),
-        boxShadow: _cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              // Realistic 3D Drop Shadow for Lifebuoy
-              Transform.translate(
-                offset: const Offset(-4, 6), // bigger offset
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 4, sigmaY: 4), // Add blur for realistic shadow
-                  child: Image.asset(
-                    'assets/images/Lifebuoy.png',
-                    height: 56, // smaller image
-                    color: const Color(0x666B4E31), // darker, more visible warm brown shadow
-                    fit: BoxFit.contain,
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // squeezed vertical padding
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderClr, width: 2),
+          boxShadow: _cardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                // Realistic 3D Drop Shadow for Lifebuoy
+                Transform.translate(
+                  offset: const Offset(-4, 6), // bigger offset
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 4, sigmaY: 4), // Add blur for realistic shadow
+                    child: Image.asset(
+                      'assets/images/Lifebuoy.png',
+                      height: 56, // smaller image
+                      color: const Color(0x666B4E31), // darker, more visible warm brown shadow
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-              ),
-              Image.asset(
-                'assets/images/Lifebuoy.png',
-                height: 56, // smaller image
-                fit: BoxFit.contain,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4), // squeezed
-          const Text(
-            'طوق النجاة',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.charcoal,
+                Image.asset(
+                  'assets/images/Lifebuoy.png',
+                  height: 56, // smaller image
+                  fit: BoxFit.contain,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 3),
-          const Text(
-            'تخطي يوم واحد',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 12,
-              color: AppColors.textSecondary,
+            const SizedBox(height: 4), // squeezed
+            const Text(
+              'طوق النجاة',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.charcoal,
+              ),
             ),
-          ),
-          const SizedBox(height: 8), // squeezed
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
+            const SizedBox(height: 3),
+            const Text(
+              'تخطي يوم واحد',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8), // squeezed
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
               decoration: BoxDecoration(
                 color: AppColors.cardFill,
@@ -302,8 +312,8 @@ class _LifebuoyHalfCard extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

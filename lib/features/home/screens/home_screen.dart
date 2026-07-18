@@ -15,6 +15,7 @@ import 'package:one_hunderd/core/widgets/streak_card.dart';
 import 'package:one_hunderd/core/services/notification_service.dart';
 import 'package:one_hunderd/features/challenges/services/challenge_service.dart';
 import 'package:one_hunderd/features/auth/screens/auth_screen.dart';
+import 'package:one_hunderd/features/activities/screens/activity_log_screen.dart';
 import 'package:one_hunderd/features/profile/screens/profile_screen.dart';
 import 'package:one_hunderd/features/settings/screens/settings_screen.dart';
 import 'package:one_hunderd/features/leaderboard/screens/leaderboard_screen.dart';
@@ -40,6 +41,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasDissolvedDialogShown = false;
   bool _hasNewSessionDialogShown = false;
   bool _hasPokeDialogShown = false;
+  int _gridAnimationTrigger = 0;
+
+  void _triggerGridAnimation() {
+    setState(() {
+      _gridAnimationTrigger++;
+    });
+  }
+
+  Future<T?> _pushScreen<T>(Widget screen) async {
+    final result = await Navigator.push<T>(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
+    if (mounted) {
+      _triggerGridAnimation();
+    }
+    return result;
+  }
 
 
   @override
@@ -514,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final provider = context.read<SavingsProvider>();
 
     // 1. Check Streak Protection first
-    if (provider.isStreakBroken) {
+    if (provider.isStreakInDanger) {
       await showLifebuoyDialog(context);
     }
     if (!mounted) return;
@@ -776,8 +795,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (user == null) return const AuthScreen();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFDFD0BC), // warmer background matching reference
-      drawer: _AppDrawer(provider: provider),
+      backgroundColor: const Color(0xFFF6EFE6), // very light background
+      drawer: _AppDrawer(
+        provider: provider,
+        pushScreen: _pushScreen,
+      ),
       body: Stack(
         children: [
           const _BackgroundDecor(),
@@ -788,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 SliverAppBar(
                   pinned: true,
                   floating: false,
-                  backgroundColor: const Color(0xFFDFD0BC),
+                  backgroundColor: const Color(0xFFF6EFE6),
                   elevation: 0,
                   scrolledUnderElevation: 0,
                   automaticallyImplyLeading: false,
@@ -811,7 +833,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _HouseCard(user: user, provider: provider),
+                      _HouseCard(
+                        user: user,
+                        provider: provider,
+                        pushScreen: _pushScreen,
+                        animationTrigger: _gridAnimationTrigger,
+                      ),
                       const SizedBox(height: 16),
                       const StreakCard(),
                       const SizedBox(height: 12),
@@ -836,15 +863,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: const Icon(Icons.bug_report, color: AppColors.white),
           ),
           const SizedBox(height: 16),
-          if (!provider.isComplete)
-            FloatingActionButton(
-              heroTag: 'add_btn',
-              onPressed: () async {
-                await DepositDialog.show(context);
-                _refreshPendingQuestBadge();
-              },
-              child: const Icon(Icons.add_rounded, size: 28),
-            ),
+          FloatingActionButton(
+            heroTag: 'add_btn',
+            onPressed: () async {
+              await DepositDialog.show(context);
+              _refreshPendingQuestBadge();
+            },
+            child: const Icon(Icons.add_rounded, size: 28),
+          ),
         ],
       ),
     );
@@ -858,7 +884,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // ─── App Drawer ───────────────────────────────────────────────────────────────
 class _AppDrawer extends StatefulWidget {
   final SavingsProvider provider;
-  const _AppDrawer({required this.provider});
+  final Future<void> Function(Widget) pushScreen;
+  const _AppDrawer({required this.provider, required this.pushScreen});
 
   @override
   State<_AppDrawer> createState() => _AppDrawerState();
@@ -889,7 +916,7 @@ class _AppDrawerState extends State<_AppDrawer> {
   Widget build(BuildContext context) {
     final provider = widget.provider;
     return Drawer(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF6EFE6),
       width: MediaQuery.of(context).size.width * 0.5,
       child: SafeArea(
         child: Column(
@@ -904,16 +931,10 @@ class _AppDrawerState extends State<_AppDrawer> {
                       onTap: () {
                         if (provider.isCooperativeMode) {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ChallengeDetailsScreen()),
-                          );
+                          widget.pushScreen(const ChallengeDetailsScreen());
                         } else if (provider.isCompetitiveMode) {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ChallengeCompetitiveScreen()),
-                          );
+                          widget.pushScreen(const ChallengeCompetitiveScreen());
                         }
                       },
                       child: Container(
@@ -1076,7 +1097,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الملف الشخصي',
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                        widget.pushScreen(const ProfileScreen());
                       },
                     ),
 
@@ -1085,7 +1106,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'لوحة الصدارة',
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
+                        widget.pushScreen(const LeaderboardScreen());
                       },
                     ),
                     _DrawerItem(
@@ -1093,7 +1114,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الأصدقاء',
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()));
+                        widget.pushScreen(const FriendsScreen());
                       },
                     ),
                     // ── نظام التحدي (مع النقطة الحمراء) ──
@@ -1103,7 +1124,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                       badgeCount: _pendingChallengeCount,
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ChallengeHubScreen()));
+                        widget.pushScreen(const ChallengeHubScreen());
                       },
                     ),
                     _DrawerItem(
@@ -1137,7 +1158,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الإعدادات',
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                        widget.pushScreen(const SettingsScreen());
                       },
                     ),
                   ],
@@ -1470,19 +1491,26 @@ class _TopBar extends StatelessWidget {
 class _HouseCard extends StatelessWidget {
   final dynamic user;
   final SavingsProvider provider;
+  final Future<void> Function(Widget) pushScreen;
+  final int animationTrigger;
 
-  const _HouseCard({required this.user, required this.provider});
+  const _HouseCard({
+    required this.user,
+    required this.provider,
+    required this.pushScreen,
+    required this.animationTrigger,
+  });
 
   @override
   Widget build(BuildContext context) {
     // Flower images width — used to reserve padding so grid never overlaps them
-    const double flowerWidth = 56.0; // enlarged from 38
+    const double flowerWidth = 48.0; // slightly reduced to prevent overlap when moving inward
     const double flowerReservedPadding = 30.0; // Adjusted padding to prevent leaf text overlap
 
     return PhysicalShape(
       clipper: _HouseClipper(),
       elevation: 20, // much stronger 3D elevation
-      color: const Color(0xFFFAF3E8),
+      color: const Color(0xFFEDE4D5), // Darker warm beige
       shadowColor: const Color(0xFF6B4E31).withValues(alpha: 0.45), 
       child: Stack(
           clipBehavior: Clip.none,
@@ -1493,25 +1521,31 @@ class _HouseCard extends StatelessWidget {
                 painter: _RoofPainter(),
               ),
             ),
+            // ── White 3D Border ──
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _HouseBorderPainter(),
+              ),
+            ),
             // ── Main Column: Logo + Grid + Cards ──────────────────────
             Column(
               children: [
-                const SizedBox(height: 48), // reduced top space to raise logo
+                const SizedBox(height: 46), // increased to move logo down
 
                 // ── Brand Logo ──
                 Image.asset(
                   'assets/images/Logo.png',
-                  height: 76, // slightly smaller logo
+                  height: 76, // restored original logo size
                   fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 8), // reduced space before grid
+                const SizedBox(height: 0), // reduced to keep grid in the exact same vertical position
 
                 // ── 100-Day Grid (padded so flowers don't overlap) ──
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: flowerReservedPadding,
                   ),
-                  child: const SavingsGrid(),
+                  child: SavingsGrid(animationTrigger: animationTrigger),
                 ),
                 const SizedBox(height: 12),
 
@@ -1528,17 +1562,11 @@ class _HouseCard extends StatelessWidget {
                               _showCooperativeGoalBottomSheet(
                                   context, user, provider);
                             } else if (provider.isCompetitiveMode) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ChallengeCompetitiveScreen(),
-                                ),
-                              );
+                              pushScreen(const ChallengeCompetitiveScreen());
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFAF3E8), // exact house sticker color
                               border: Border.all(
@@ -1591,7 +1619,8 @@ class _HouseCard extends StatelessWidget {
                                         .textTheme
                                         .titleMedium
                                         ?.copyWith(
-                                            fontWeight: FontWeight.w700),
+                                            fontWeight: FontWeight.w700,
+                                            fontFamily: 'sans-serif'),
                                   ),
                                 ),
                               ],
@@ -1605,24 +1634,13 @@ class _HouseCard extends StatelessWidget {
                         child: GestureDetector(
                           onTap: () {
                             if (provider.isCooperativeMode) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ChallengeDetailsScreen()),
-                              );
+                              pushScreen(const ChallengeDetailsScreen());
                             } else if (provider.isCompetitiveMode) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ChallengeCompetitiveScreen(),
-                                ),
-                              );
+                              pushScreen(const ChallengeCompetitiveScreen());
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFAF3E8), // exact house sticker color
                               border: Border.all(
@@ -1651,13 +1669,14 @@ class _HouseCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${provider.totalSaved.toStringAsFixed(2)} JD',
+                                  '${_formatNumber(provider.totalSaved)} JD',
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium
                                       ?.copyWith(
                                         fontWeight: FontWeight.w700,
                                         color: AppColors.green,
+                                        fontFamily: 'sans-serif',
                                       ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1684,30 +1703,30 @@ class _HouseCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
               ],
             ),
 
             // ── Flower Left — positioned on the left edge, vertically centered on the grid area ──
             Positioned(
-              left: -4,
-              top: 150, // adjusted to match new grid height
+              left: 0, // moved inward slightly away from white border
+              top: 208, // moved further down
               child: Image.asset(
                 'assets/images/Flower_L.png',
                 width: flowerWidth,
-                height: 230,
+                height: 205, // slightly smaller to prevent overlap with numbers
                 fit: BoxFit.contain,
               ),
             ),
 
             // ── Flower Right — positioned on the right edge, vertically centered on the grid area ──
             Positioned(
-              right: -4,
-              top: 150, // adjusted to match new grid height
+              right: 0, // moved inward slightly away from white border
+              top: 208, // moved further down
               child: Image.asset(
                 'assets/images/Flower_R.png',
                 width: flowerWidth,
-                height: 230,
+                height: 205, // slightly smaller to prevent overlap with numbers
                 fit: BoxFit.contain,
               ),
             ),
@@ -1723,7 +1742,11 @@ class _HouseCard extends StatelessWidget {
         (m) => '${m[1]},',
       );
     }
-    return value.toStringAsFixed(2);
+    final s = value.toStringAsFixed(2);
+    if (s.endsWith('0')) {
+      return s.substring(0, s.length - 1);
+    }
+    return s;
   }
 }
 
@@ -1825,6 +1848,21 @@ class _HouseClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
+class _HouseBorderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _HouseClipper().getClip(size);
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0; // Half will be clipped by PhysicalShape, leaving a 2.0px inner border
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class _RoofPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -1858,7 +1896,6 @@ class _RoofPainter extends CustomPainter {
     final double pCapRight = pChimRight + 5;
     final double pCapTop = 5.0; 
     final double pCapBottom = 19.0;
-    final double pTrunkBottom = 90.0; // Extended deep into the roof
     
     // Matched Colors
     final chimneyPaint = Paint()..color = const Color(0xFFC0A288); 
@@ -1897,7 +1934,7 @@ class _RoofPainter extends CustomPainter {
     
     // Bottom Light Layer (Bevel effect)
     final lightRoofPaint = Paint()
-      ..color = const Color(0xFFF0E0D0)
+      ..color = const Color(0xFFDCC8B6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = roofThick
       ..strokeCap = StrokeCap.round
@@ -1905,7 +1942,7 @@ class _RoofPainter extends CustomPainter {
       
     // Top Dark Layer
     final darkRoofPaint = Paint()
-      ..color = const Color(0xFFDCC8B6)
+      ..color = const Color(0xFFC4AB97)
       ..style = PaintingStyle.stroke
       ..strokeWidth = roofThick
       ..strokeCap = StrokeCap.round
@@ -1980,12 +2017,28 @@ class _SummaryRow extends StatelessWidget {
           label: 'العمليات',
           value: '${provider.deposits.length}',
           icon: Icons.receipt_long_outlined,
+          onTap: provider.isCooperativeMode
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ChallengeDetailsScreen(),
+                    ),
+                  );
+                }
+              : null,
         ),
         const SizedBox(width: 8),
         _StatBox(
-          label: 'المتبقي',
-          value: '${provider.remainingDays}',
-          icon: Icons.hourglass_empty_rounded,
+          label: 'السجل',
+          value: 'عرض',
+          icon: Icons.history,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ActivityLogScreen()),
+            );
+          },
         ),
       ],
     );
@@ -1996,20 +2049,25 @@ class _StatBox extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final VoidCallback? onTap;
   const _StatBox({
     required this.label,
     required this.value,
     required this.icon,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAF3E8), // exact house sticker color
+          color: const Color(0xFFFAF7F2), // exact house sticker color
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white, width: 2), // white 3D border
           boxShadow: const [
             BoxShadow(
               color: Color(0x1A6B4E31), // subtle shadow for card pop
@@ -2047,6 +2105,7 @@ class _StatBox extends StatelessWidget {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -2083,7 +2142,7 @@ void _showCooperativeGoalBottomSheet(BuildContext context, dynamic user, Savings
 
   showModalBottomSheet(
     context: context,
-    backgroundColor: AppColors.background,
+    backgroundColor: const Color(0xFFF6EFE6),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -2153,7 +2212,7 @@ void _showCooperativeGoalBottomSheet(BuildContext context, dynamic user, Savings
                         const SizedBox(height: 4),
                         Text(
                           '${financialGoal.toStringAsFixed(2)} JD',
-                          style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 22, fontWeight: FontWeight.w900),
+                          style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 22, fontWeight: FontWeight.w900, fontFamily: 'sans-serif'),
                         ),
                       ],
                     ),
@@ -2167,7 +2226,7 @@ void _showCooperativeGoalBottomSheet(BuildContext context, dynamic user, Savings
                         const SizedBox(height: 4),
                         Text(
                           '${targetPerPerson.toStringAsFixed(2)} JD',
-                          style: const TextStyle(color: AppColors.charcoal, fontSize: 20, fontWeight: FontWeight.w800),
+                          style: const TextStyle(color: AppColors.charcoal, fontSize: 20, fontWeight: FontWeight.w800, fontFamily: 'sans-serif'),
                         ),
                       ],
                     ),
@@ -2238,7 +2297,7 @@ Widget _buildPartnerGoalProgress({
                 const SizedBox(height: 2),
                 Text(
                   'المتبقي: ${remaining.toStringAsFixed(2)} JD',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'sans-serif'),
                 ),
               ],
             ),
@@ -2248,7 +2307,7 @@ Widget _buildPartnerGoalProgress({
             children: [
               Text(
                 '${saved.toStringAsFixed(2)} / ${target.toStringAsFixed(2)} JD',
-                style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 14),
+                style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'sans-serif'),
               ),
               const SizedBox(height: 2),
               Text(

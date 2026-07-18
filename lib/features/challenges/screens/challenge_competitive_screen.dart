@@ -596,7 +596,8 @@ class _ChallengeCompetitiveScreenState
                               style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
-                                  color: _orange),
+                                  color: _orange,
+                                  fontFamily: 'sans-serif'),
                             ),
                           ],
                         ),
