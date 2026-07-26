@@ -1331,6 +1331,8 @@ class SavingsProvider extends ChangeNotifier {
     await init();
   }
   Future<void> updateAccountDetails({
+    String? fullName,
+    String? bio,
     String? newEmail,
     String? newPassword,
     String? maritalStatus,
@@ -1350,19 +1352,20 @@ class SavingsProvider extends ChangeNotifier {
     }
 
     // 2. Update Firestore document
-    // Build update map based on what's provided, fallback to current profile data
+    final updatedFullName = (fullName != null && fullName.trim().isNotEmpty) ? fullName.trim() : _userProfile!.fullName;
+    final updatedBio = bio ?? _userProfile!.bio;
     final updatedMaritalStatus = maritalStatus ?? _userProfile!.maritalStatus;
     final updatedBirthDate = birthDate ?? _userProfile!.birthDate;
     final updatedGoal = goal ?? _userProfile!.goal;
     final updatedFinancialGoal = financialGoal ?? _userProfile!.financialGoal;
     
-    // We must ensure 'contact' is updated if email was changed (since contact acts as email usually)
+    // We must ensure 'contact' is updated if email was changed
     final updatedContact = (newEmail != null && newEmail.isNotEmpty) ? newEmail : _userProfile!.contact;
 
     // 2. Update local state
     final oldProfile = _userProfile!;
     _userProfile = UserProfile(
-      fullName: _userProfile!.fullName,
+      fullName: updatedFullName,
       gender: _userProfile!.gender,
       contact: updatedContact,
       financialGoal: updatedFinancialGoal,
@@ -1370,6 +1373,7 @@ class SavingsProvider extends ChangeNotifier {
       goal: updatedGoal,
       challengeType: _userProfile!.challengeType,
       birthDate: updatedBirthDate,
+      bio: updatedBio,
     );
     notifyListeners();
     
@@ -1380,6 +1384,14 @@ class SavingsProvider extends ChangeNotifier {
     final changesOld = <String>[];
     final changesNew = <String>[];
     
+    if (oldProfile.fullName != updatedFullName) {
+      changesOld.add('الاسم: ${oldProfile.fullName}');
+      changesNew.add('الاسم: $updatedFullName');
+    }
+    if (oldProfile.bio != updatedBio) {
+      changesOld.add('النبذة: ${oldProfile.bio}');
+      changesNew.add('النبذة: $updatedBio');
+    }
     if (oldProfile.contact != updatedContact) {
       changesOld.add('الإيميل: ${oldProfile.contact}');
       changesNew.add('الإيميل: $updatedContact');
@@ -1443,8 +1455,11 @@ class SavingsProvider extends ChangeNotifier {
     required String goal,
     required String challengeType,
     DateTime? birthDate,
+    int avatarIndex = 0,
   }) async {
-    await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+    if (FirebaseAuth.instance.currentUser == null) {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+    }
     
     _userProfile = UserProfile(
       fullName: fullName,
@@ -1456,6 +1471,7 @@ class SavingsProvider extends ChangeNotifier {
       challengeType: challengeType,
       birthDate: birthDate,
     );
+    _avatarIndex = avatarIndex;
     _deposits.clear();
     _currentStreak = 0;
     _lifebuoys = 0;
@@ -1592,14 +1608,22 @@ class SavingsProvider extends ChangeNotifier {
   }
 
   Future<void> deleteDeposit(String id) async {
-    _deposits.removeWhere((d) => d.id == id);
+    final depIndex = _deposits.indexWhere((d) => d.id == id);
+    String amountText = '';
+    if (depIndex != -1) {
+      final amt = _deposits[depIndex].amount;
+      amountText = ' بقيمة ${amt.toStringAsFixed(amt.truncateToDouble() == amt ? 0 : 2)} د.أ';
+      _deposits.removeAt(depIndex);
+    } else {
+      _deposits.removeWhere((d) => d.id == id);
+    }
     _updateStreakAndLastDate();
     notifyListeners();
     await _persist();
     await _logActivity(
       type: ActivityType.deleteDeposit,
       title: 'حذف إيداع',
-      description: 'تم حذف عملية الإيداع المحددة',
+      description: 'تم حذف إيداع$amountText',
     );
   }
 
@@ -1825,6 +1849,10 @@ class SavingsProvider extends ChangeNotifier {
       if (oldProfile.fullName != profile.fullName) {
         changesOld.add('الاسم: ${oldProfile.fullName}');
         changesNew.add('الاسم: ${profile.fullName}');
+      }
+      if (oldProfile.bio != profile.bio) {
+        changesOld.add('النبذة: ${oldProfile.bio}');
+        changesNew.add('النبذة: ${profile.bio}');
       }
       if (oldProfile.birthDate != profile.birthDate) {
         final oldDateStr = oldProfile.birthDate != null ? "${oldProfile.birthDate!.year}-${oldProfile.birthDate!.month.toString().padLeft(2, '0')}-${oldProfile.birthDate!.day.toString().padLeft(2, '0')}" : "غير محدد";

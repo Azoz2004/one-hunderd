@@ -272,6 +272,292 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     }
   }
 
+  void _showBadgeDetailModal({
+    required String name,
+    required String emoji,
+    required String? imagePath,
+    required bool isUnlocked,
+    required String howToEarn,
+    required String howEarnedText,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.cardFill,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 90,
+                height: 90,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (imagePath != null)
+                      ClipOval(
+                        child: Transform.scale(
+                          scale: 1.1,
+                          child: ColorFiltered(
+                            colorFilter: isUnlocked
+                                ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
+                                : const ColorFilter.matrix([
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0,      0,      0,      0.60, 0,
+                                  ]),
+                            child: Image.asset(imagePath, fit: BoxFit.contain),
+                          ),
+                        ),
+                      )
+                    else
+                      Text(emoji, style: const TextStyle(fontSize: 44)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.charcoal,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isUnlocked
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : AppColors.background,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isUnlocked ? Colors.green : AppColors.borderLight,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isUnlocked ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                      size: 14,
+                      color: isUnlocked ? Colors.green : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isUnlocked ? 'شارة مكتسبة 🎉' : 'شارة مقفولة 🔒',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isUnlocked ? Colors.green.shade800 : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      isUnlocked ? 'كيف حصل عليها؟ 🌟' : 'طريقة فتح هذه الشارة 🎯',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.charcoal,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isUnlocked ? howEarnedText : howToEarn,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.charcoal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('حسناً، فهمت', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAchievementDetailModal({
+    required String title,
+    required String emoji,
+    required String? imagePath,
+    required bool isUnlocked,
+    required String howToEarn,
+    required String howEarnedText,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.cardFill,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 90,
+                height: 90,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (imagePath != null)
+                      ClipOval(
+                        child: Transform.scale(
+                          scale: 1.1,
+                          child: ColorFiltered(
+                            colorFilter: isUnlocked
+                                ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
+                                : const ColorFilter.matrix([
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0.2126, 0.7152, 0.0722, 0, 0,
+                                    0,      0,      0,      0.60, 0,
+                                  ]),
+                            child: Image.asset(imagePath, fit: BoxFit.contain),
+                          ),
+                        ),
+                      )
+                    else
+                      Text(emoji, style: const TextStyle(fontSize: 44)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.charcoal,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isUnlocked
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : AppColors.background,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isUnlocked ? Colors.green : AppColors.borderLight,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isUnlocked ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                      size: 14,
+                      color: isUnlocked ? Colors.green : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isUnlocked ? 'إنجاز مكتسب 🎉' : 'إنجاز مقفول 🔒',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isUnlocked ? Colors.green.shade800 : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      isUnlocked ? 'كيف حقق هذا الإنجاز؟ 🌟' : 'طريقة فتح هذا الإنجاز 🎯',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.charcoal,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isUnlocked ? howEarnedText : howToEarn,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.charcoal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('حسناً، فهمت', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   double _totalSaved() {
     final deps = _userData?['deposits_v1'] as List<dynamic>? ?? [];
     return deps.fold(0.0, (s, d) => s + ((d['amount'] as num?)?.toDouble() ?? 0));
@@ -310,14 +596,6 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     return '${months[dt.month - 1]} ${dt.year}';
   }
 
-  void _showLockedSnack(String msg) {
-    AppSnackbar.show(
-      context: context,
-      message: msg,
-      isSuccess: false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final initialName = widget.initialName ?? 'مستخدم';
@@ -342,6 +620,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final coins = _userData?['wooden_coins_v1'] as int? ?? 0;
     final avatarIndex = _userData?['avatarIndex'] as int? ?? initialAvatarIndex;
     final progress = goal > 0 ? (totalSaved / goal).clamp(0.0, 1.0) : 0.0;
+    final depsList = _userData?['deposits_v1'] as List<dynamic>? ?? [];
+    final depositsCount = depsList.length;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -511,7 +791,26 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                             style: TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w800, fontSize: 17),
                           ),
                           const SizedBox(height: 12),
-                          BadgesSection(onTap: _showLockedSnack),
+                          BadgesSection(
+                            streakDays: streak,
+                            onBadgeTap: ({
+                              required name,
+                              required emoji,
+                              required imagePath,
+                              required isUnlocked,
+                              required howToEarn,
+                              required howEarnedText,
+                            }) {
+                              _showBadgeDetailModal(
+                                name: name,
+                                emoji: emoji,
+                                imagePath: imagePath,
+                                isUnlocked: isUnlocked,
+                                howToEarn: howToEarn,
+                                howEarnedText: howEarnedText,
+                              );
+                            },
+                          ),
                           const SizedBox(height: 24),
 
                           // ── Achievements ──
@@ -520,7 +819,30 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                             style: TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w800, fontSize: 17),
                           ),
                           const SizedBox(height: 12),
-                          AchievementsSection(onTap: _showLockedSnack),
+                          AchievementsSection(
+                            depositsCount: depositsCount,
+                            streakDays: streak,
+                            financialGoal: goal,
+                            totalSaved: totalSaved,
+                            woodenCoins: coins,
+                            onTap: ({
+                              required title,
+                              required emoji,
+                              required imagePath,
+                              required isUnlocked,
+                              required howToEarn,
+                              required howEarnedText,
+                            }) {
+                              _showAchievementDetailModal(
+                                title: title,
+                                emoji: emoji,
+                                imagePath: imagePath,
+                                isUnlocked: isUnlocked,
+                                howToEarn: howToEarn,
+                                howEarnedText: howEarnedText,
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),

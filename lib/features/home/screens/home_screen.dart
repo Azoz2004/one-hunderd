@@ -967,7 +967,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                                     ClipOval(
                                       child: FacelessAvatar(
                                         index: provider.avatarIndex,
-                                        size: 32,
+                                        size: 48,
                                       ),
                                     ),
                                     const SizedBox(height: 4),

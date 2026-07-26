@@ -17,6 +17,9 @@ class UserProfile {
   /// تاريخ الميلاد
   final DateTime? birthDate;
 
+  /// النبذة العامة / البايو
+  final String bio;
+
   UserProfile({
     required this.fullName,
     required this.gender,
@@ -26,6 +29,7 @@ class UserProfile {
     this.goal = 'بيت',
     this.challengeType = 'فردي',
     this.birthDate,
+    this.bio = '',
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -38,6 +42,7 @@ class UserProfile {
       goal: json['goal'] as String? ?? 'بيت',
       challengeType: json['challengeType'] as String? ?? 'فردي',
       birthDate: json['birthDate'] != null ? DateTime.tryParse(json['birthDate']) : null,
+      bio: json['bio'] as String? ?? '',
     );
   }
 
@@ -51,6 +56,7 @@ class UserProfile {
       'goal': goal,
       'challengeType': challengeType,
       'birthDate': birthDate?.toIso8601String(),
+      'bio': bio,
     };
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
@@ -15,8 +14,8 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
+  late TextEditingController _fullNameController;
+  late TextEditingController _bioController;
   late TextEditingController _financialGoalController;
   
   String _selectedStatus = 'شاب';
@@ -24,7 +23,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   DateTime? _selectedBirthDate;
 
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -32,9 +30,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final provider = context.read<SavingsProvider>();
     final userProfile = provider.userProfile;
     
-    _emailController = TextEditingController(text: userProfile?.contact ?? '');
-    _passwordController = TextEditingController(); // Empty, only used if they want to change it
-    _financialGoalController = TextEditingController(text: userProfile?.financialGoal.toStringAsFixed(2) ?? '5050');
+    _fullNameController = TextEditingController(text: userProfile?.fullName ?? '');
+    _bioController = TextEditingController(text: userProfile?.bio ?? '');
+    _financialGoalController = TextEditingController(
+      text: userProfile?.financialGoal.toStringAsFixed(2) ?? '5050',
+    );
     
     _selectedStatus = userProfile?.maritalStatus ?? 'شاب';
     if (!['شاب', 'شابة', 'متزوج', 'متزوجة'].contains(_selectedStatus)) {
@@ -51,8 +51,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _fullNameController.dispose();
+    _bioController.dispose();
     _financialGoalController.dispose();
     super.dispose();
   }
@@ -62,13 +62,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedBirthDate ?? DateTime(now.year - 20),
-      firstDate: DateTime(1900),
+      firstDate: DateTime(1920),
       lastDate: now,
       builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Colors.orangeAccent,
+              primary: AppColors.charcoal,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: AppColors.charcoal,
@@ -81,6 +81,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (date != null) {
       setState(() => _selectedBirthDate = date);
     }
+  }
+
+  int _calcAge(DateTime? date) {
+    if (date == null) return 0;
+    final now = DateTime.now();
+    int age = now.year - date.year;
+    if (now.month < date.month || (now.month == date.month && now.day < date.day)) {
+      age--;
+    }
+    return age;
   }
 
   Future<void> _saveChanges() async {
@@ -96,8 +106,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
       
       await provider.updateAccountDetails(
-        newEmail: _emailController.text.trim(),
-        newPassword: _passwordController.text.isEmpty ? null : _passwordController.text,
+        fullName: _fullNameController.text.trim(),
+        bio: _bioController.text.trim(),
         maritalStatus: _selectedStatus,
         goal: _selectedGoal,
         financialGoal: goalValue,
@@ -107,28 +117,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         AppSnackbar.show(
           context: context,
-          message: 'تم حفظ البيانات بنجاح!',
+          message: 'تم حفظ بيانات الملف الشخصي بنجاح ✏️',
           isSuccess: true,
         );
         Navigator.pop(context);
-      }
-    } on FirebaseAuthException catch (e) {
-      String msg = e.message ?? 'حدث خطأ';
-      if (e.code == 'requires-recent-login') {
-        msg = 'لأسباب أمنية (تغيير الإيميل أو الرمز)، يرجى تسجيل الخروج والدخول مجدداً ثم المحاولة.';
-      }
-      if (mounted) {
-        AppSnackbar.show(
-          context: context,
-          message: 'خطأ: $msg',
-          isSuccess: false,
-        );
       }
     } catch (e) {
       if (mounted) {
         AppSnackbar.show(
           context: context,
-          message: 'خطأ: $e',
+          message: 'خطأ أثناء الحفظ: $e',
           isSuccess: false,
         );
       }
@@ -139,6 +137,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final calculatedAge = _calcAge(_selectedBirthDate);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -146,11 +146,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          'تعديل الحساب',
+          'تعديل الملف الشخصي',
           style: TextStyle(
             color: AppColors.charcoal,
             fontWeight: FontWeight.w800,
-            fontSize: 20,
+            fontSize: 19,
           ),
         ),
         leading: IconButton(
@@ -168,48 +168,85 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'يمكنك تعديل بياناتك في أي وقت لتحديث ملفك الشخصي.',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    textAlign: TextAlign.center,
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardFill,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderLight),
+                    ),
+                    child: Row(
+                      textDirection: TextDirection.rtl,
+                      children: const [
+                        Icon(Icons.info_outline_rounded, color: AppColors.textSecondary, size: 20),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'عدّل اسمك، نبذتك الشخصية، وتاريخ ميلادك ليظهر ملفك بشكل مميز وخاص.',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 24),
 
-                  // الايميل
-                  _buildLabel('البريد الإلكتروني'),
+                  // الاسم الكامل
+                  _buildLabel('الاسم الكامل'),
                   _StyledField(
-                    controller: _emailController,
-                    icon: Icons.email_outlined,
-                    hint: 'أدخل بريدك الإلكتروني',
+                    controller: _fullNameController,
+                    icon: Icons.person_outline_rounded,
+                    hint: 'أدخل اسمك الكامل',
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'البريد الإلكتروني مطلوب';
-                      if (!v.contains('@')) return 'بريد غير صالح';
+                      if (v == null || v.trim().isEmpty) return 'الاسم الكامل مطلوب';
                       return null;
                     },
                   ),
                   const SizedBox(height: 20),
 
-                  // الرمز السري
-                  _buildLabel('الرمز السري (اختياري)'),
+                  // النبذة العامة / البايو
+                  _buildLabel('النبذة العامة (البايو)'),
                   _StyledField(
-                    controller: _passwordController,
-                    icon: Icons.lock_outline_rounded,
-                    hint: 'اتركه فارغاً إذا لم ترد تغييره',
-                    obscureText: _obscurePassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: AppColors.textSecondary,
-                        size: 20,
+                    controller: _bioController,
+                    icon: Icons.article_outlined,
+                    hint: 'اكتب نبذة مختصرة عن نفسك أو رسالتك التحفيزية...',
+                    maxLines: 3,
+                    maxLength: 120,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // تاريخ الميلاد والـ Age
+                  _buildLabel('تاريخ الميلاد (العمر)'),
+                  GestureDetector(
+                    onTap: _selectDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardFill,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.borderLight),
                       ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      child: Row(
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          const Icon(Icons.cake_rounded, color: AppColors.charcoal, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedBirthDate != null
+                                  ? '${_selectedBirthDate!.year}/${_selectedBirthDate!.month.toString().padLeft(2, '0')}/${_selectedBirthDate!.day.toString().padLeft(2, '0')} (${calculatedAge > 0 ? '$calculatedAge سنة' : 'تاريخ جديد'})'
+                                  : 'انقر لاختيار تاريخ ميلادك',
+                              style: TextStyle(
+                                color: _selectedBirthDate != null ? AppColors.charcoal : AppColors.textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textSecondary),
+                        ],
+                      ),
                     ),
-                    validator: (v) {
-                      if (v != null && v.isNotEmpty && v.length < 6) {
-                        return 'يجب أن يكون الرمز 6 أحرف على الأقل';
-                      }
-                      return null;
-                    },
                   ),
                   const SizedBox(height: 20),
 
@@ -225,14 +262,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedStatus,
-                        icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.charcoal),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.charcoal),
                         isExpanded: true,
                         dropdownColor: AppColors.cardFill,
                         style: const TextStyle(
                           color: AppColors.charcoal,
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          fontFamily: 'Cairo', // assuming app font
                         ),
                         items: ['شاب', 'شابة', 'متزوج', 'متزوجة'].map((String value) {
                           return DropdownMenuItem<String>(
@@ -248,77 +284,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // تاريخ الميلاد
-                  _buildLabel('تاريخ الميلاد'),
-                  GestureDetector(
-                    onTap: _selectDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardFill,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.borderLight),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today_rounded, color: Colors.orangeAccent, size: 20),
-                          const SizedBox(width: 12),
-                          Text(
-                            _selectedBirthDate != null
-                                ? '${_selectedBirthDate!.year}-${_selectedBirthDate!.month.toString().padLeft(2, '0')}-${_selectedBirthDate!.day.toString().padLeft(2, '0')}'
-                                : 'اختر تاريخ ميلادك',
-                            style: TextStyle(
-                              color: _selectedBirthDate != null ? AppColors.charcoal : AppColors.textSecondary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // الهدف
-                  _buildLabel('هدفك من التوفير'),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardFill,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.borderLight),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedGoal,
-                        icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.charcoal),
-                        isExpanded: true,
-                        dropdownColor: AppColors.cardFill,
-                        style: const TextStyle(
-                          color: AppColors.charcoal,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Cairo',
-                        ),
-                        items: ['زواج', 'بيت', 'صحة', 'ترك التدخين'].map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (newValue) {
-                          if (newValue != null) setState(() => _selectedGoal = newValue);
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
                   // الهدف المالي
-                  _buildLabel('الهدف المالي المراد جمعه'),
+                  _buildLabel('الهدف المالي (دينار أردني JD)'),
                   _StyledField(
                     controller: _financialGoalController,
-                    icon: Icons.attach_money_rounded,
+                    icon: Icons.savings_outlined,
                     hint: 'الهدف المالي',
                     keyboardType: TextInputType.number,
                     validator: (v) {
@@ -328,30 +298,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
 
                   // زر الحفظ
                   ElevatedButton(
                     onPressed: _isLoading ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orangeAccent,
+                      backgroundColor: AppColors.charcoal,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                      shadowColor: Colors.orangeAccent.withValues(alpha: 0.4),
+                      elevation: 2,
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                            width: 24, height: 24,
+                            width: 22, height: 22,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : const Text(
-                            'حفظ التعديلات',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 20, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'حفظ التعديلات',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                              ),
+                            ],
                           ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -366,6 +342,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       padding: const EdgeInsets.only(bottom: 8, right: 4),
       child: Text(
         text,
+        textAlign: TextAlign.right,
         style: const TextStyle(
           color: AppColors.charcoal,
           fontSize: 14,
@@ -380,8 +357,8 @@ class _StyledField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final IconData icon;
-  final bool obscureText;
-  final Widget? suffixIcon;
+  final int maxLines;
+  final int? maxLength;
   final String? Function(String?)? validator;
   final TextInputType keyboardType;
 
@@ -389,8 +366,8 @@ class _StyledField extends StatelessWidget {
     required this.controller,
     required this.hint,
     required this.icon,
-    this.obscureText = false,
-    this.suffixIcon,
+    this.maxLines = 1,
+    this.maxLength,
     this.validator,
     this.keyboardType = TextInputType.text,
   });
@@ -399,22 +376,23 @@ class _StyledField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
-      obscureText: obscureText,
       validator: validator,
+      maxLines: maxLines,
+      maxLength: maxLength,
       keyboardType: keyboardType,
+      textDirection: TextDirection.rtl,
       style: const TextStyle(
         color: AppColors.charcoal,
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: FontWeight.w600,
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
           color: AppColors.textSecondary.withValues(alpha: 0.5),
-          fontSize: 14,
+          fontSize: 13,
         ),
         prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
-        suffixIcon: suffixIcon,
         filled: true,
         fillColor: AppColors.cardFill,
         border: OutlineInputBorder(
@@ -427,7 +405,7 @@ class _StyledField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.orangeAccent, width: 2),
+          borderSide: const BorderSide(color: AppColors.charcoal, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
