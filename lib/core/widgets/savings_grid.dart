@@ -9,7 +9,6 @@ class SavingsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
-      key: ValueKey<int>(animationTrigger),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -20,7 +19,10 @@ class SavingsGrid extends StatelessWidget {
         mainAxisSpacing: 8.5, // optimized height to fit the enlarged circles inside the sticker
       ),
       itemCount: 100,
-      itemBuilder: (context, index) => DayCell(dayNumber: index + 1),
+      itemBuilder: (context, index) => DayCell(
+        dayNumber: index + 1,
+        animationTrigger: animationTrigger,
+      ),
     );
   }
 }

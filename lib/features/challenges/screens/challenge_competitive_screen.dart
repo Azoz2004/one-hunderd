@@ -5,6 +5,7 @@ import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/features/profile/screens/profile_screen.dart';
 import 'package:one_hunderd/features/challenges/screens/challenge_competitive_stats_screen.dart';
 
@@ -123,16 +124,16 @@ class _ChallengeCompetitiveScreenState
       if (mounted) {
         AppSnackbar.show(
           context: context,
-          message: 'تم إرسال النكزة! 👇 خُصم 10 مسكوكات',
+          message: 'تم إرسال النكزة! خُصم 10 مسكوكات',
           isSuccess: true, // we treat successful poke as success
         );
       }
     } catch (e) {
       String msg = 'حدث خطأ، حاول مجدداً';
       if (e.toString().contains('insufficient_coins')) {
-        msg = 'رصيدك من المسكوكات غير كافٍ (يلزم 10 مسكوكات 🪙)';
+        msg = 'رصيدك من المسكوكات غير كافٍ (يلزم 10 مسكوكات)';
       } else if (e.toString().contains('already_poked_today')) {
-        msg = 'لقد نكزت خصمك اليوم بالفعل! عد غداً 😄';
+        msg = 'لقد نكزت خصمك اليوم بالفعل! عد غداً';
       }
       if (mounted) {
         AppSnackbar.show(
@@ -270,9 +271,8 @@ class _ChallengeCompetitiveScreenState
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const ChallengeCompetitiveStatsScreen(),
+                  AppScalePageRoute(
+                    page: const ChallengeCompetitiveStatsScreen(),
                   ),
                 );
               },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/features/profile/screens/edit_profile_screen.dart';
 
@@ -44,7 +45,7 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                    AppScalePageRoute(page: const EditProfileScreen()),
                   );
                 },
               ),

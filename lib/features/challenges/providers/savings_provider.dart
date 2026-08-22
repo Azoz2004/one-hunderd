@@ -2068,7 +2068,7 @@ class SavingsProvider extends ChangeNotifier {
 
         // Trigger local notification
         await NotificationService().showInstantNotification(
-          'تم قبول طلب الصداقة! 🎉',
+          'تم قبول طلب الصداقة!',
           'قبل $receiverName طلب الصداقة الخاص بك.',
         );
       }
@@ -2092,7 +2092,7 @@ class SavingsProvider extends ChangeNotifier {
             final typeStr = data['type'] as String? ?? 'cooperative';
             final typeLabel = typeStr == 'cooperative' ? 'تعاوني' : 'تنافسي';
             await NotificationService().showInstantNotification(
-              'دعوة تحدي $typeLabel! ⚔️',
+              'دعوة تحدي $typeLabel!',
               'أرسل لك $senderName دعوة للانضمام إلى تحدي $typeLabel.',
             );
           }

@@ -10,8 +10,8 @@ class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
   static const Color charcoal = Color(0xFF1A1A1A);
   static const Color textSecondary = Color(0xFF9E9890);
-  static const Color green = Color(0xFF4CAF50);
-  static const Color greenLight = Color(0xFFE8F5E9);
+  static const Color green = Color(0xFF10B981);
+  static const Color greenLight = Color(0xFFECFDF5);
   static const Color border = Color(0xFFC8C2BA);
   static const Color borderLight = Color(0xFFDDD7CF);
   static const Color decorArc = Color(0xFFDDD7CF);

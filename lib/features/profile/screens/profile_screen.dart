@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
+import 'package:one_hunderd/core/widgets/custom_date_picker_modal.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/features/profile/models/user_profile.dart';
 
@@ -107,6 +109,67 @@ class LinkedAvatars extends StatelessWidget {
   }
 }
 
+class CrossedSwordsIcon extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const CrossedSwordsIcon({
+    super.key,
+    this.size = 14,
+    this.color = AppColors.charcoal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        size: Size(size, size),
+        painter: _SwordsPainter(color: color),
+      ),
+    );
+  }
+}
+
+class _SwordsPainter extends CustomPainter {
+  final Color color;
+  _SwordsPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final bladePaint = Paint()
+      ..color = color
+      ..strokeWidth = (w * 0.16).clamp(1.8, 3.5)
+      ..strokeCap = StrokeCap.round;
+
+    final guardPaint = Paint()
+      ..color = color
+      ..strokeWidth = (w * 0.16).clamp(1.8, 3.5)
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    // Sword 1 (\: Top-Left to Bottom-Right)
+    canvas.drawLine(Offset(w * 0.12, h * 0.12), Offset(w * 0.82, h * 0.82), bladePaint);
+    canvas.drawLine(Offset(w * 0.58, h * 0.78), Offset(w * 0.78, h * 0.58), guardPaint);
+    canvas.drawCircle(Offset(w * 0.85, h * 0.85), w * 0.10, fillPaint);
+
+    // Sword 2 (/: Top-Right to Bottom-Left)
+    canvas.drawLine(Offset(w * 0.88, h * 0.12), Offset(w * 0.18, h * 0.82), bladePaint);
+    canvas.drawLine(Offset(w * 0.42, h * 0.78), Offset(w * 0.22, h * 0.58), guardPaint);
+    canvas.drawCircle(Offset(w * 0.15, h * 0.85), w * 0.10, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SwordsPainter oldDelegate) => oldDelegate.color != color;
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -186,8 +249,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (mounted) {
               AppSnackbar.show(
                 context: context,
-                message: 'تم تحديث الصورة الرمزية بنجاح 👤',
+                message: 'تم تحديث الصورة الرمزية بنجاح',
                 isSuccess: true,
+                isEdit: true,
               );
             }
           },
@@ -199,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showEditProfileDialog() {
     final profile = _data?['user_profile_v1'] as Map<String, dynamic>? ?? {};
     final provider = context.read<SavingsProvider>();
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => Dialog(
@@ -225,8 +289,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.pop(ctx);
                 AppSnackbar.show(
                   context: context,
-                  message: 'تم تحديث الملف الشخصي بنجاح ✏️',
+                  message: 'تم تحديث الملف الشخصي بنجاح',
                   isSuccess: true,
+                  isEdit: true,
                 );
               }
             },
@@ -244,7 +309,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String howToEarn,
     required String howEarnedText,
   }) {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.cardFill,
@@ -387,7 +452,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String howToEarn,
     required String howEarnedText,
   }) {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.cardFill,
@@ -554,27 +619,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isCoop = provider.isCooperativeMode;
     final partnerAvatar = provider.partnerAvatarIndex;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: AppBar(
-            title: const Text(
-              'الملف الشخصي',
-              style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.charcoal, fontSize: 20),
-            ),
-            centerTitle: true,
-            backgroundColor: AppColors.background,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.charcoal, size: 20),
-              onPressed: () => Navigator.pop(context),
-            ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text(
+            'الملف الشخصي',
+            style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.charcoal, fontSize: 18),
+          ),
+          centerTitle: false,
+          titleSpacing: 0,
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.charcoal, size: 20),
+            onPressed: () => Navigator.pop(context),
           ),
         ),
-      ),
       body: RefreshIndicator(
         color: AppColors.charcoal,
         onRefresh: _loadData,
@@ -701,6 +763,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -778,7 +841,132 @@ class ProfileHeader extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar on LEFT
+              // User Info (Right aligned text)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: AppColors.charcoal,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 19,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.alternate_email_rounded, size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            contact,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Organized Info Chips Row
+                    Wrap(
+                      alignment: WrapAlignment.start,
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (isCooperativeMode || challengeType == 'تعاوني')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2196F3).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.handshake_rounded, size: 13, color: Color(0xFF1565C0)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'تعاوني',
+                                  style: TextStyle(color: Color(0xFF1565C0), fontSize: 11, fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (challengeType == 'تنافسي')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.deepOrange.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.4)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.bolt_rounded, size: 14, color: Color(0xFFFF5722)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'تنافسي',
+                                  style: TextStyle(color: Color(0xFFFF5722), fontSize: 11, fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (challengeType == 'فردي' || (!isCooperativeMode && challengeType != 'تعاوني' && challengeType != 'تنافسي'))
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.background.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_rounded, size: 13, color: AppColors.textSecondary),
+                                SizedBox(width: 4),
+                                Text(
+                                  'فردي',
+                                  style: TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (age > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.background.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.cake_rounded, size: 12, color: AppColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$age سنة',
+                                  style: const TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Avatar on LEFT (in RTL)
               GestureDetector(
                 onTap: onAvatarTap,
                 child: Stack(
@@ -814,105 +1002,6 @@ class ProfileHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
-              // User Info (Right aligned text)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      fullName,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: AppColors.charcoal,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 19,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            contact,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.alternate_email_rounded, size: 14, color: AppColors.textSecondary),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Organized Info Chips Row (spacious and clear)
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        if (isCooperativeMode)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                            ),
-                            child: const Text(
-                              'تعاوني 👥',
-                              style: TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                        if (age > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.background.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.borderLight),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '$age سنة',
-                                  style: const TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.cake_rounded, size: 12, color: AppColors.textSecondary),
-                              ],
-                            ),
-                          ),
-                        if (!isCooperativeMode && challengeType != 'تعاوني')
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.background.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.borderLight),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  challengeType,
-                                  style: const TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.flag_rounded, size: 12, color: AppColors.textSecondary),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           
@@ -930,7 +1019,7 @@ class ProfileHeader extends StatelessWidget {
               border: Border.all(color: AppColors.borderLight),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'النبذة العامة',
@@ -1062,20 +1151,23 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final d = await showDatePicker(
+  void _pickDate() {
+    final now = DateTime.now();
+    final initialDate = _birthDate ?? DateTime(now.year - 20, 6, 15);
+    showModalBottomSheet(
       context: context,
-      initialDate: _birthDate ?? DateTime(2000),
-      firstDate: DateTime(1920),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.charcoal, onPrimary: AppColors.white),
-        ),
-        child: child!,
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext ctx) {
+        return CustomDatePickerModal(
+          initialDate: initialDate,
+          onConfirm: (d) {
+            setState(() => _birthDate = d);
+            Navigator.pop(ctx);
+          },
+        );
+      },
     );
-    if (d != null) setState(() => _birthDate = d);
   }
 
   @override
@@ -1418,7 +1510,12 @@ class _OverviewAmountRow extends StatelessWidget {
         ),
         Text(
           amount,
-          style: TextStyle(fontSize: 13, color: amountColor, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            fontSize: 13,
+            color: amountColor,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'sans-serif',
+          ),
         ),
       ],
     );
@@ -1463,7 +1560,12 @@ class _InsightTile extends StatelessWidget {
                 Text(
                   value,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 12, color: AppColors.charcoal, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.charcoal,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'sans-serif',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

@@ -712,7 +712,7 @@ class _ShareProfileTabState extends State<_ShareProfileTab>
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path)],
-          text: 'انضم إليّ في تحدي المئة يوم! 💰\n$link',
+          text: 'انضم إليّ في تحدي المئة يوم!\n$link',
         ),
       );
     } catch (e) {

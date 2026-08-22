@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/features/activities/models/activity_log.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
@@ -621,7 +622,7 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
   }
 
   void _confirmDeleteSelected() {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('حذف النشاطات المحددة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),

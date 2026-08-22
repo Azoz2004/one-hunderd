@@ -5,6 +5,7 @@ import 'package:one_hunderd/features/challenges/models/challenge_invitation.dart
 import 'package:one_hunderd/features/challenges/services/challenge_service.dart';
 import 'package:one_hunderd/features/friends/services/friends_service.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:provider/provider.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/features/challenges/screens/challenge_explanation_screen.dart';
@@ -66,7 +67,7 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
     final isCompetitive = provider.isCompetitiveMode;
     final typeName = isCompetitive ? 'التنافسي' : 'التعاوني المشترك';
 
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
@@ -159,7 +160,7 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
                   if (context.mounted) {
                     AppSnackbar.show(
                       context: context,
-                      message: 'تم إرسال طلب الانفصال. بانتظار موافقة شريكك... ⏳',
+                      message: 'تم إرسال طلب الانفصال. بانتظار موافقة شريكك...',
                       isSuccess: true,
                     );
                   }
@@ -221,7 +222,7 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
                         if (inChallenge) {
                           AppSnackbar.show(
                             context: context,
-                            message: 'أنت بالفعل في تحدي نشط! 🤝',
+                            message: 'أنت بالفعل في تحدي نشط!',
                             isSuccess: false,
                           );
                         } else {
@@ -408,8 +409,8 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const ChallengeExplanationScreen(),
+                      AppScalePageRoute(
+                        page: const ChallengeExplanationScreen(),
                       ),
                     );
                   },
@@ -559,7 +560,7 @@ class _ChallengeHubScreenState extends State<ChallengeHubScreen> {
                                   ? 'تم قبول دعوة التحدي التنافسي بنجاح! سيتم إعادة توجيهك الآن لتهيئة مساحة التحدي.'
                                   : 'تم قبول دعوة التحدي التعاوني بنجاح! سيتم إعادة توجيهك الآن لتهيئة البيانات المشتركة مع شريكك.';
 
-                              showDialog(
+                              showAppDialog(
                                 context: context,
                                 barrierDismissible: false,
                                 builder: (ctxDialog) => Directionality(
@@ -854,8 +855,8 @@ class _ActiveChallengeCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => isCompetitive
+          AppScalePageRoute(
+            page: isCompetitive
                 ? const ChallengeCompetitiveStatsScreen()
                 : const ChallengeDetailsScreen(),
           ),
@@ -1494,7 +1495,7 @@ class _FriendsPickerSheetState extends State<_FriendsPickerSheet> {
         widget.onInviteSent();
         AppSnackbar.show(
           context: context,
-          message: 'تم إرسال الدعوة إلى ${friend.fullName}! ✉️',
+          message: 'تم إرسال الدعوة إلى ${friend.fullName}!',
           isSuccess: true,
         );
       }

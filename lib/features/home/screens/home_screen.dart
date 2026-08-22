@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:one_hunderd/features/challenges/widgets/gamification_dialogs.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/deposit_dialog.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/core/widgets/savings_grid.dart';
@@ -43,19 +44,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasPokeDialogShown = false;
   int _gridAnimationTrigger = 0;
 
-  void _triggerGridAnimation() {
-    setState(() {
-      _gridAnimationTrigger++;
-    });
-  }
-
   Future<T?> _pushScreen<T>(Widget screen) async {
+    // 1. لا نقوم بأي إعادة بناء فورية لحظة الدفع لنحافظ على سلاسة انيميشن الصعود (380ms)
+    // بعد اكتمال صعود الصفحة وتغطيتها للشاشة (450ms)، نطفئ الخلايا في الخلفية بهدوء
+    Future.delayed(const Duration(milliseconds: 450), () {
+      if (mounted) {
+        setState(() {
+          if (_gridAnimationTrigger % 2 == 0) {
+            _gridAnimationTrigger++;
+          }
+        });
+      }
+    });
+
+    // 2. فتح الصفحة بحركة صعود ناعمة 60fps
     final result = await Navigator.push<T>(
       context,
-      MaterialPageRoute(builder: (_) => screen),
+      AppScalePageRoute<T>(page: screen),
     );
+
+    // 3. عند العودة: ننتظر انتهاء انيميشن نزول وخروج الصفحة بالكامل (460ms)
+    // وحينها تكون خلايا الشاشة الرئيسية مطفأة مسبقاً، فتبدأ موجة الامتلاء والإضاءة
     if (mounted) {
-      _triggerGridAnimation();
+      Future.delayed(const Duration(milliseconds: 480), () {
+        if (mounted) {
+          setState(() {
+            if (_gridAnimationTrigger % 2 != 0) {
+              _gridAnimationTrigger++;
+            } else {
+              _gridAnimationTrigger += 2;
+            }
+          });
+        }
+      });
     }
     return result;
   }
@@ -155,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final provider = context.read<SavingsProvider>();
     final pokedBy = provider.lastPokedBy ?? 'الخصم';
     provider.clearPokeNotification();
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (dialogCtx) => Directionality(
         textDirection: TextDirection.rtl,
@@ -164,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           backgroundColor: const Color(0xFFFFF3E0),
           title: const Row(
             children: [
-              Text('👇', style: TextStyle(fontSize: 26)),
+              Icon(Icons.touch_app_rounded, color: Color(0xFFD84315), size: 28),
               SizedBox(width: 8),
               Text('لكزك خصمك!',
                   style: TextStyle(
@@ -174,13 +195,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
           content: Text(
-            'نكزك $pokedBy ليذكّرك بالإيداع اليومي!\nلا تدعه يتقدم عليك 🏆',
+            'نكزك $pokedBy ليذكّرك بالإيداع اليومي!\nلا تدعه يتقدم عليك',
             style: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF4E342E)),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('حسناً! 💪',
+              child: const Text('حسناً',
                   style: TextStyle(
                       color: Color(0xFFFF5722), fontWeight: FontWeight.w700)),
             ),
@@ -196,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final type = provider.newSessionType ?? 'تعاوني';
     final isComp = type == 'تنافسي';
 
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Directionality(
@@ -214,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isComp ? 'بدأ التحدي التنافسي! ⚔️' : 'بدأ التحدي التعاوني! 🤝',
+                  isComp ? 'بدأ التحدي التنافسي!' : 'بدأ التحدي التعاوني!',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 17,
@@ -261,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final partnerName = provider.partnerName ?? 'شريكك';
     final isCompetitive = provider.isCompetitiveMode;
 
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Directionality(
@@ -332,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (mounted) {
                     AppSnackbar.show(
                       context: context,
-                      message: 'رفضت طلب الانفصال. يستمر التحدي المشترك! 💪',
+                      message: 'رفضت طلب الانفصال. يستمر التحدي المشترك!',
                       isSuccess: true,
                     );
                   }
@@ -374,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Double-confirmation before actually completing the separation (receiver side).
   void _showApproveSeparationConfirmationDialog() {
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Directionality(
@@ -467,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Shows a dialog to the INITIATOR when their partner has approved the dissolution.
   void _showSessionDissolvedDialog() {
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Directionality(
@@ -842,7 +863,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       const SizedBox(height: 16),
                       const StreakCard(),
                       const SizedBox(height: 12),
-                      _SummaryRow(provider: provider),
+                      _SummaryRow(
+                        provider: provider,
+                        pushScreen: _pushScreen,
+                      ),
                     ]),
                   ),
                 ),
@@ -855,6 +879,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // ── FAB ──
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           FloatingActionButton.small(
             heroTag: 'debug_btn',
@@ -862,14 +887,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onPressed: () => _showDebugMenu(context),
             child: const Icon(Icons.bug_report, color: AppColors.white),
           ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'add_btn',
+          const SizedBox(height: 14),
+          _GlowingDepositButton(
             onPressed: () async {
               await DepositDialog.show(context);
               _refreshPendingQuestBadge();
             },
-            child: const Icon(Icons.add_rounded, size: 28),
           ),
         ],
       ),
@@ -972,12 +995,12 @@ class _AppDrawerState extends State<_AppDrawer> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      provider.userProfile?.fullName ?? 'أنا',
+                                      (provider.userProfile?.fullName ?? 'أنا').trim().split(' ').first,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         color: AppColors.charcoal,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 10,
+                                        fontSize: 11,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -1000,11 +1023,10 @@ class _AppDrawerState extends State<_AppDrawer> {
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    const Text(
-                                      '⚔️',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                      ),
+                                    const Icon(
+                                      Icons.bolt_rounded,
+                                      size: 18,
+                                      color: Color(0xFFFF5722),
                                     ),
                                   ],
                                 ),
@@ -1022,12 +1044,12 @@ class _AppDrawerState extends State<_AppDrawer> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      provider.partnerName ?? 'الخصم',
+                                      (provider.partnerName ?? 'الخصم').trim().split(' ').first,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         color: AppColors.charcoal,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 10,
+                                        fontSize: 11,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -1058,8 +1080,8 @@ class _AppDrawerState extends State<_AppDrawer> {
                                   children: [
                                     Text(
                                       provider.isCooperativeMode
-                                          ? 'أنت 🤝 ${provider.partnerName ?? 'شريكك'}'
-                                          : (provider.userProfile?.fullName ?? 'مستخدم'),
+                                          ? '${(provider.userProfile?.fullName ?? 'مستخدم').trim().split(' ').first} & ${(provider.partnerName ?? 'شريكك').trim().split(' ').first}'
+                                          : (provider.userProfile?.fullName ?? 'مستخدم').trim().split(' ').first,
                                       textAlign: TextAlign.right,
                                       style: const TextStyle(
                                         color: AppColors.charcoal,
@@ -1070,15 +1092,25 @@ class _AppDrawerState extends State<_AppDrawer> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      provider.isCooperativeMode
-                                          ? 'التحدي التعاوني المشترك 👥'
-                                          : 'مرحباً بك!',
-                                      textAlign: TextAlign.right,
-                                      style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 10,
-                                      ),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        if (provider.isCooperativeMode) ...[
+                                          const Icon(Icons.handshake_rounded, size: 12, color: Color(0xFF2196F3)),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        Text(
+                                          provider.isCooperativeMode
+                                              ? 'تعاوني'
+                                              : 'مرحباً بك!',
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1134,7 +1166,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                         Navigator.pop(context);
                         AppSnackbar.show(
                           context: context,
-                          message: 'ميزة المتجر قادمة قريباً! 🛒',
+                          message: 'ميزة المتجر قادمة قريباً!',
                           isSuccess: false,
                           isInfo: true,
                         );
@@ -1147,7 +1179,7 @@ class _AppDrawerState extends State<_AppDrawer> {
                         Navigator.pop(context);
                         AppSnackbar.show(
                           context: context,
-                          message: 'ميزة الغابة الحقيقية قادمة قريباً! 🌲',
+                          message: 'ميزة الغابة الحقيقية قادمة قريباً!',
                           isSuccess: false,
                           isInfo: true,
                         );
@@ -1172,7 +1204,7 @@ class _AppDrawerState extends State<_AppDrawer> {
               color: AppColors.error,
               onTap: () {
                 Navigator.pop(context);
-                showDialog(
+                showAppDialog(
                   context: context,
                   barrierDismissible: true,
                   builder: (BuildContext context) {
@@ -2001,7 +2033,8 @@ class _DecorPainter extends CustomPainter {
 
 class _SummaryRow extends StatelessWidget {
   final SavingsProvider provider;
-  const _SummaryRow({required this.provider});
+  final Future<void> Function(Widget) pushScreen;
+  const _SummaryRow({required this.provider, required this.pushScreen});
 
   @override
   Widget build(BuildContext context) {
@@ -2018,14 +2051,7 @@ class _SummaryRow extends StatelessWidget {
           value: '${provider.deposits.length}',
           icon: Icons.receipt_long_outlined,
           onTap: provider.isCooperativeMode
-              ? () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ChallengeDetailsScreen(),
-                    ),
-                  );
-                }
+              ? () => pushScreen(const ChallengeDetailsScreen())
               : null,
         ),
         const SizedBox(width: 8),
@@ -2033,12 +2059,7 @@ class _SummaryRow extends StatelessWidget {
           label: 'السجل',
           value: 'عرض',
           icon: Icons.history,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ActivityLogScreen()),
-            );
-          },
+          onTap: () => pushScreen(const ActivityLogScreen()),
         ),
       ],
     );
@@ -2330,4 +2351,120 @@ Widget _buildPartnerGoalProgress({
       ),
     ],
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Modern Glowing Add Deposit Button (كبسة إضافة إيداع العصرية والمضيئة)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _GlowingDepositButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  const _GlowingDepositButton({required this.onPressed});
+
+  @override
+  State<_GlowingDepositButton> createState() => _GlowingDepositButtonState();
+}
+
+class _GlowingDepositButtonState extends State<_GlowingDepositButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+  late Animation<double> _spreadAnimation;
+  late Animation<double> _alphaAnimation;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _glowAnimation = Tween<double>(begin: 10.0, end: 22.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _spreadAnimation = Tween<double>(begin: 1.5, end: 5.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _alphaAnimation = Tween<double>(begin: 0.35, end: 0.65).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final currentScale = _isPressed ? 0.90 : _scaleAnimation.value;
+        return Transform.scale(
+          scale: currentScale,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E676).withValues(alpha: _alphaAnimation.value),
+                  blurRadius: _glowAnimation.value,
+                  spreadRadius: _spreadAnimation.value,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onPressed();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00E676), Color(0xFF10B981), Color(0xFF059669)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.6),
+              width: 2.0,
+            ),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.add_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

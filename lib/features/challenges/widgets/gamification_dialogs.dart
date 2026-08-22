@@ -8,6 +8,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 
@@ -177,112 +178,156 @@ Future<void> checkAndShowPendingQuest(BuildContext context, int completedDays) a
 Future<void> _showInsightDialog(BuildContext context) async {
   final insight = _insights[Random().nextInt(_insights.length)];
 
-  await showDialog<void>(
+  await showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: AppColors.white,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-            // Icon
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.cardFill,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.charcoal.withValues(alpha: 0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 34,
-                color: Color(0xFFD4A017),
-              ),
-            ),
-            const SizedBox(height: 20),
+    barrierLabel: 'إغلاق النصيحة',
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    transitionDuration: const Duration(milliseconds: 450),
+    pageBuilder: (ctx, anim1, anim2) => const SizedBox.shrink(),
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+      final curvedAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutBack,
+      );
 
-            // Label
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.cardFill,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'النصيحة اليومية',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+      return ScaleTransition(
+        scale: Tween<double>(begin: 0.84, end: 1.0).animate(curvedAnimation),
+        child: FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          ),
+          child: Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: AppColors.white,
+            elevation: 12,
+            shadowColor: AppColors.charcoal.withValues(alpha: 0.15),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Glowing Icon Container
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFFF9E6),
+                            Color(0xFFFFECB3),
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF5B041).withValues(alpha: 0.35),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.lightbulb_rounded,
+                        size: 38,
+                        color: Color(0xFFD4AC0D),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Category Pill Tag
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardFill,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border.withValues(alpha: 0.5), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.auto_awesome_rounded, size: 14, color: Color(0xFFD4AC0D)),
+                          SizedBox(width: 6),
+                          Text(
+                            'حكمة اليوم المالية 💡',
+                            style: TextStyle(
+                              color: AppColors.charcoal,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Quote Text
+                    Text(
+                      '"${insight['quote']}"',
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        color: AppColors.charcoal,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.65,
+                      ),
+                    ),
+                    // Author Text (إن وجد اسم الكاتب ولم يكن "حكمة مالية")
+                    if (insight['author'] != null &&
+                        insight['author'] != 'حكمة مالية' &&
+                        insight['author'] != 'تحدي المئة') ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '— ${insight['author']}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+
+                    // Divider
+                    Divider(color: AppColors.border.withValues(alpha: 0.4), height: 1),
+                    const SizedBox(height: 20),
+
+                    // Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.charcoal,
+                          foregroundColor: AppColors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'شكراً',
+                          style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Quote
-            Text(
-              '"${insight['quote']}"',
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(
-                color: AppColors.charcoal,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                height: 1.65,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Author
-            Text(
-              '— ${insight['author']}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Divider
-            const Divider(color: AppColors.borderLight, height: 1),
-            const SizedBox(height: 20),
-
-            // Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.of(ctx).pop(),
-                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                label: const Text('رائع، شكراً!'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.charcoal,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -298,7 +343,7 @@ Future<void> _showQuestDialog(
   final questIndex = ((day ~/ 7) - 1) % _quests.length;
   final quest = _quests[questIndex];
 
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     barrierDismissible: true,
     builder: (ctx) => StatefulBuilder(
@@ -507,7 +552,7 @@ Future<void> _showQuestDialog(
 
 Future<void> _showMilestoneDialog(BuildContext context, int day) async {
   final milestone = _milestones[day]!;
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => _MilestoneDialogContent(
@@ -850,7 +895,7 @@ class _MilestoneDialogContentState extends State<_MilestoneDialogContent> {
         if (success) {
           AppSnackbar.show(
             context: context,
-            message: 'تمت المشاركة بنجاح! حصلت على 20 قطعة خشبية 🪙',
+            message: 'تمت المشاركة بنجاح! حصلت على 20 قطعة خشبية',
             isSuccess: true,
           );
         }
@@ -877,7 +922,7 @@ String _todayKey() {
 // ─── Lifebuoy System ──────────────────────────────────────────────────────────
 
 Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = false}) async {
-  await showDialog<void>(
+  await showAppDialog<void>(
     context: context,
     barrierDismissible: true,
     builder: (ctx) {
@@ -1006,7 +1051,7 @@ Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = fals
                                   if (ctx.mounted) {
                                     AppSnackbar.show(
                                       context: ctx,
-                                      message: 'تم شراء طوق نجاة بنجاح! 🛟',
+                                      message: 'تم شراء طوق نجاة بنجاح!',
                                       isSuccess: true,
                                     );
                                   }
@@ -1070,7 +1115,7 @@ Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = fals
                                       if (context.mounted) {
                                         AppSnackbar.show(
                                           context: context,
-                                          message: 'تم إنقاذ الستريك بنجاح! 🛟',
+                                          message: 'تم إنقاذ الستريك بنجاح!',
                                           isSuccess: true,
                                         );
                                       }
@@ -1121,118 +1166,343 @@ Future<void> showLifebuoyDialog(BuildContext context, {bool manualTrigger = fals
 
 // ─── Wallet System ────────────────────────────────────────────────────────────
 
+// ─── Vault System (الخزنة الذكية) ──────────────────────────────────────────────
+
 Future<void> showWalletDialog(BuildContext context) async {
-  await showDialog<void>(
+  await showGeneralDialog<void>(
     context: context,
-    builder: (ctx) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final provider = context.watch<SavingsProvider>();
-          final today = DateTime.now();
-          final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-          final canClaimDaily = provider.lastDailyClaimDate != todayStr;
-          final adsWatched = provider.adsWatchedToday;
-          final canWatchAd = adsWatched < 4;
-
-          return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            backgroundColor: AppColors.white,
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.account_balance_wallet_rounded, size: 64, color: AppColors.charcoal),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'المحفظة',
-                    style: TextStyle(color: AppColors.charcoal, fontSize: 24, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'رصيدك الحالي: ${provider.woodenCoins} قطعة خشبية',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  // Daily Claim
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: canClaimDaily
-                          ? () async {
-                              await provider.claimDailyReward();
-                              if (ctx.mounted) {
-                                AppSnackbar.show(
-                                  context: ctx,
-                                  message: 'حصلت على 10 قطع خشبية! 🪙',
-                                  isSuccess: true,
-                                );
-                              }
-                            }
-                          : null,
-                      icon: const Icon(Icons.card_giftcard_rounded, size: 20),
-                      label: Text(canClaimDaily ? 'المكافأة اليومية (+10)' : 'تم الاستلام اليوم', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.green,
-                        foregroundColor: AppColors.white,
-                        disabledBackgroundColor: AppColors.borderLight,
-                        disabledForegroundColor: AppColors.textSecondary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Watch Ad
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: canWatchAd
-                          ? () async {
-                              // Simulate ad viewing
-                              showDialog(
-                                context: ctx,
-                                barrierDismissible: false,
-                                builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.charcoal)),
-                              );
-                              await Future.delayed(const Duration(seconds: 2));
-                              if (ctx.mounted) Navigator.pop(ctx); // Close loading
-                              
-                              await provider.watchAdReward();
-                              if (ctx.mounted) {
-                                AppSnackbar.show(
-                                  context: ctx,
-                                  message: 'حصلت على 25 قطعة خشبية! 🪙',
-                                  isSuccess: true,
-                                );
-                              }
-                            }
-                          : null,
-                      icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
-                      label: Text('شاهد إعلان (+25)   $adsWatched/4', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.charcoal,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: AppColors.border, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('إغلاق', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ),
-            ),
-          );
-        },
+    barrierDismissible: true,
+    barrierLabel: 'الخزنة',
+    barrierColor: Colors.black.withValues(alpha: 0.6),
+    transitionDuration: const Duration(milliseconds: 280),
+    pageBuilder: (ctx, anim1, anim2) => const _VaultDialog(),
+    transitionBuilder: (ctx, anim1, anim2, child) {
+      return ScaleTransition(
+        scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+        child: FadeTransition(
+          opacity: anim1,
+          child: child,
+        ),
       );
     },
   );
+}
+
+class _VaultDialog extends StatefulWidget {
+  const _VaultDialog();
+
+  @override
+  State<_VaultDialog> createState() => _VaultDialogState();
+}
+
+class _VaultDialogState extends State<_VaultDialog> {
+  bool _isAdLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<SavingsProvider>();
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final canClaimDaily = provider.lastDailyClaimDate != todayStr;
+    final adsWatched = provider.adsWatchedToday;
+    final canWatchAd = adsWatched < 4;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 25,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Top Header with Dark Premium Card ──
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF1E242B), Color(0xFF2C3440)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const Row(
+                            children: [
+                              Icon(Icons.shield_moon_rounded, color: Color(0xFFFFB74D), size: 20),
+                              SizedBox(width: 6),
+                              Text(
+                                'الخزنة الذكية',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 24),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Animated Balance Counter Card
+                      TweenAnimationBuilder<double>(
+                        duration: const Duration(milliseconds: 600),
+                        tween: Tween<double>(begin: 0.8, end: 1.0),
+                        curve: Curves.elasticOut,
+                        builder: (context, scale, child) {
+                          return Transform.scale(
+                            scale: scale,
+                            child: child,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withValues(alpha: 0.1),
+                                blurRadius: 15,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.generating_tokens_rounded, color: Color(0xFFFFB74D), size: 28),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${provider.woodenCoins}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'قطع خشبية متوفرة',
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Action Buttons Section ──
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // Daily Reward Card
+                      _VaultActionTile(
+                        icon: Icons.card_giftcard_rounded,
+                        iconColor: const Color(0xFF4CAF50),
+                        title: 'المكافأة اليومية',
+                        subtitle: canClaimDaily ? '+10 قطع خشبية' : 'تم الاستلام اليوم',
+                        badgeText: canClaimDaily ? 'متاحة' : 'تمت',
+                        badgeColor: canClaimDaily ? const Color(0xFF4CAF50) : AppColors.textSecondary,
+                        isEnabled: canClaimDaily,
+                        onTap: () async {
+                          await provider.claimDailyReward();
+                          if (context.mounted) {
+                            AppSnackbar.show(
+                              context: context,
+                              message: 'حصلت على 10 قطع خشبية!',
+                              isSuccess: true,
+                            );
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Watch Ad Card
+                      _VaultActionTile(
+                        icon: Icons.play_circle_fill_rounded,
+                        iconColor: const Color(0xFFFF9800),
+                        title: 'مشاهدة إعلان',
+                        subtitle: canWatchAd ? '+25 قطعة خشبية' : 'وصلت للحد اليومي',
+                        badgeText: '$adsWatched / 4',
+                        badgeColor: canWatchAd ? const Color(0xFFFF9800) : AppColors.textSecondary,
+                        isEnabled: canWatchAd && !_isAdLoading,
+                        isLoading: _isAdLoading,
+                        onTap: () async {
+                          setState(() => _isAdLoading = true);
+                          await Future.delayed(const Duration(seconds: 2));
+                          await provider.watchAdReward();
+                          if (context.mounted) {
+                            setState(() => _isAdLoading = false);
+                            AppSnackbar.show(
+                              context: context,
+                              message: 'حصلت على 25 قطعة خشبية!',
+                              isSuccess: true,
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VaultActionTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String badgeText;
+  final Color badgeColor;
+  final bool isEnabled;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _VaultActionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.badgeText,
+    required this.badgeColor,
+    required this.isEnabled,
+    this.isLoading = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: isEnabled ? 1.0 : 0.55,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled && !isLoading ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.cardFill,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isEnabled ? iconColor.withValues(alpha: 0.3) : AppColors.borderLight,
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: iconColor,
+                          ),
+                        )
+                      : Icon(icon, color: iconColor, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: AppColors.charcoal,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      color: badgeColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

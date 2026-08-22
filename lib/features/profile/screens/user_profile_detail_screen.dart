@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:one_hunderd/features/friends/services/friends_service.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/features/profile/screens/profile_screen.dart'; // FacelessAvatar, AccountOverview
 
@@ -74,7 +75,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
         AppSnackbar.show(
           context: context,
-          message: 'تم إرسال طلب الصداقة بنجاح 🎉',
+          message: 'تم إرسال طلب الصداقة بنجاح',
           isSuccess: true,
         );
       }
@@ -102,7 +103,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
         AppSnackbar.show(
           context: context,
-          message: 'تم إلغاء طلب الصداقة بنجاح 🚫',
+          message: 'تم إلغاء طلب الصداقة بنجاح',
           isSuccess: true,
         );
       }
@@ -140,7 +141,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
         AppSnackbar.show(
           context: context,
-          message: 'تم قبول طلب الصداقة بنجاح 🎉',
+          message: 'تم قبول طلب الصداقة بنجاح',
           isSuccess: true,
         );
       }
@@ -175,7 +176,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
         AppSnackbar.show(
           context: context,
-          message: 'تم رفض طلب الصداقة 🚫',
+          message: 'تم رفض طلب الصداقة',
           isSuccess: true,
         );
       }
@@ -195,7 +196,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final profile = _userData?['user_profile_v1'] as Map<String, dynamic>? ?? {};
     final fullName = profile['fullName'] as String? ?? widget.initialName ?? 'المستخدم';
 
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
@@ -255,7 +256,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
         AppSnackbar.show(
           context: context,
-          message: 'تم إلغاء الصداقة بنجاح 🚫',
+          message: 'تم إلغاء الصداقة بنجاح',
           isSuccess: false,
           isDelete: true,
         );
@@ -280,7 +281,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     required String howToEarn,
     required String howEarnedText,
   }) {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.cardFill,
@@ -423,7 +424,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     required String howToEarn,
     required String howEarnedText,
   }) {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.cardFill,
@@ -605,6 +606,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final profile = _userData?['user_profile_v1'] as Map<String, dynamic>? ?? {};
     final fullName = profile['fullName'] as String? ?? initialName;
     final contact = profile['contact'] as String? ?? initialEmail;
+    final bio = profile['bio'] as String? ?? '';
     final birthDateStr = profile['birthDate'] as String?;
     final birthDate = birthDateStr != null ? DateTime.tryParse(birthDateStr) : null;
     int? age;
@@ -628,13 +630,16 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: Text(fullName, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: const Text(
+            'الملف الشخصي',
+            style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.charcoal, fontSize: 18),
+          ),
           centerTitle: false,
           backgroundColor: AppColors.background,
           elevation: 0,
           titleSpacing: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.charcoal, size: 20),
             onPressed: () => Navigator.pop(context, true),
           ),
         ),
@@ -676,87 +681,216 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: AppColors.cardFill,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: AppColors.borderLight),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: AppColors.borderLight, width: 1.2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.charcoal.withValues(alpha: 0.04),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                ClipOval(child: FacelessAvatar(index: avatarIndex, size: 72)),
-                                const SizedBox(width: 16),
-                                Expanded(
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // ── Name & Info on RIGHT ──
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  fullName,
+                                                  textAlign: TextAlign.right,
+                                                  style: const TextStyle(
+                                                    color: AppColors.charcoal,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 19,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (_status == FriendshipStatus.friends) ...[
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.green.withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.check_circle_rounded, size: 11, color: AppColors.green),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        'صديق',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: AppColors.green,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.alternate_email_rounded, size: 14, color: AppColors.textSecondary),
+                                              const SizedBox(width: 6),
+                                              Flexible(
+                                                child: Text(
+                                                  contact,
+                                                  textAlign: TextAlign.right,
+                                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          // ── Info Chips ──
+                                          Wrap(
+                                            alignment: WrapAlignment.start,
+                                            spacing: 6,
+                                            runSpacing: 6,
+                                            children: [
+                                              if (profile['challengeType'] == 'تعاوني')
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF2196F3).withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.35)),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.handshake_rounded, size: 13, color: Color(0xFF1565C0)),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'تعاوني',
+                                                        style: TextStyle(color: Color(0xFF1565C0), fontSize: 11, fontWeight: FontWeight.w800),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              if (profile['challengeType'] == 'تنافسي')
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.deepOrange.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.4)),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.bolt_rounded, size: 14, color: Color(0xFFFF5722)),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'تنافسي',
+                                                        style: TextStyle(color: Color(0xFFFF5722), fontSize: 11, fontWeight: FontWeight.w800),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              if (profile['challengeType'] == 'فردي' || (profile['challengeType'] != 'تعاوني' && profile['challengeType'] != 'تنافسي'))
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.background.withValues(alpha: 0.8),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: AppColors.borderLight),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.person_rounded, size: 13, color: AppColors.textSecondary),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'فردي',
+                                                        style: TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              if (age != null && age > 0)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.background.withValues(alpha: 0.8),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    border: Border.all(color: AppColors.borderLight),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.cake_rounded, size: 12, color: AppColors.textSecondary),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        '$age سنة',
+                                                        style: const TextStyle(color: AppColors.charcoal, fontSize: 11, fontWeight: FontWeight.w700),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // ── Avatar on LEFT (in RTL) ──
+                                    ClipOval(child: FacelessAvatar(index: avatarIndex, size: 76)),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                const Divider(height: 1, color: AppColors.borderLight),
+                                const SizedBox(height: 12),
+                                // ── Bio Box aligned to RIGHT ──
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.background.withValues(alpha: 0.6),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.borderLight),
+                                  ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              fullName,
-                                              style: const TextStyle(
-                                                color: AppColors.charcoal,
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 18,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          if (_status == FriendshipStatus.friends) ...[
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.green.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.check_circle_rounded, size: 11, color: AppColors.green),
-                                                  const SizedBox(width: 3),
-                                                  Text(
-                                                    'صديق',
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.w800,
-                                                      color: AppColors.green,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ],
+                                      const Text(
+                                        'النبذة العامة',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.alternate_email_rounded, size: 13, color: AppColors.textSecondary),
-                                          const SizedBox(width: 4),
-                                          Expanded(
-                                            child: Text(
-                                              contact,
-                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      if (age != null) ...[
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.cake_rounded, size: 13, color: AppColors.textSecondary),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'العمر: $age سنة',
-                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                                            ),
-                                          ],
+                                      Text(
+                                        bio.trim().isNotEmpty ? bio.trim() : 'لا توجد نبذة عامة',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          color: bio.trim().isNotEmpty ? AppColors.charcoal : AppColors.textSecondary.withValues(alpha: 0.7),
+                                          fontSize: 13,
+                                          height: 1.4,
                                         ),
-                                      ],
+                                      ),
                                     ],
                                   ),
                                 ),

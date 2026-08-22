@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
+import 'package:one_hunderd/core/widgets/custom_date_picker_modal.dart';
 import 'package:one_hunderd/features/home/screens/home_screen.dart';
 
 // ─── Main Auth Screen (4-step wizard) ────────────────────────────────────────
@@ -30,11 +30,18 @@ class _AuthScreenState extends State<AuthScreen>
   static const int _maxAttempts = 5;
   static const Duration _lockoutDuration = Duration(minutes: 2);
 
-  // Step-1
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _contactController = TextEditingController();
-  final _passwordController = TextEditingController();
+  // Step-1: مفتاح واحد ثابت حتى لا يُعاد بناء Form عند تغيير الوضع
+  final _step1FormKey = GlobalKey<FormState>();
+
+  // Login Controllers
+  final _loginContactController = TextEditingController();
+  final _loginPasswordController = TextEditingController();
+
+  // SignUp Controllers
+  final _signUpNameController = TextEditingController();
+  final _signUpContactController = TextEditingController();
+  final _signUpPasswordController = TextEditingController();
+
   bool _obscurePassword = true;
 
   // Step-2
@@ -69,8 +76,10 @@ class _AuthScreenState extends State<AuthScreen>
     return null;
   }
 
-  String _getValidEmail() {
-    final contact = _contactController.text.trim();
+  String _getValidEmail({required bool isLogin}) {
+    final contact = isLogin
+        ? _loginContactController.text.trim()
+        : _signUpContactController.text.trim();
     if (!contact.contains('@')) {
       return '$contact@onehundred.app';
     }
@@ -94,7 +103,7 @@ class _AuthScreenState extends State<AuthScreen>
   void _login() async {
     if (_isLoading) return;
     FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
+    if (!_step1FormKey.currentState!.validate()) return;
 
     // ── Client-side lockout check ──
     final remaining = _remainingLockoutSeconds();
@@ -105,8 +114,8 @@ class _AuthScreenState extends State<AuthScreen>
 
     _setLoading(true);
     try {
-      final email = _getValidEmail();
-      final password = _passwordController.text;
+      final email = _getValidEmail(isLogin: true);
+      final password = _loginPasswordController.text;
       await context.read<SavingsProvider>().login(email, password);
       // ── Reset attempts on success ──
       setState(() {
@@ -150,10 +159,11 @@ class _AuthScreenState extends State<AuthScreen>
 
   // ── Forgot Password ───────────────────────────────────────────────────────
   void _showForgotPassword() {
+    final contact = _loginContactController.text.trim().isNotEmpty
+        ? _loginContactController.text.trim()
+        : _signUpContactController.text.trim();
     final ctrl = TextEditingController(
-      text: _contactController.text.trim().contains('@')
-          ? _contactController.text.trim()
-          : '',
+      text: contact.contains('@') ? contact : '',
     );
     showModalBottomSheet(
       context: context,
@@ -167,41 +177,43 @@ class _AuthScreenState extends State<AuthScreen>
     if (_isLoading) return;
     FocusScope.of(context).unfocus();
     if (_currentStep == 0) {
-      if (!_formKey.currentState!.validate()) return;
-      if (!_isLoginMode && _nameController.text.trim().isEmpty) {
+      if (_isLoginMode) {
+        _login();
+        return;
+      }
+      if (!_step1FormKey.currentState!.validate()) return;
+      if (_signUpNameController.text.trim().isEmpty) {
         _showSnack('الرجاء إدخال اسمك');
         return;
       }
-      if (!_isLoginMode) {
-        final email = _getValidEmail();
-        final password = _passwordController.text;
-        _setLoading(true);
-        try {
-          // ── فحص الإيميل بالإنشاء ثم الحذف الفوري (بدون حسابات مهجورة) ──
-          final tempCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: email,
-            password: password,
-          );
-          await tempCred.user?.delete(); // حذف الحساب المؤقت فوراً
-        } on FirebaseAuthException catch (e) {
-          _setLoading(false);
-          String msg = e.message ?? 'حدث خطأ في التسجيل';
-          if (e.code == 'email-already-in-use') {
-            msg = 'هذا البريد الإلكتروني مسجل مسبقاً، الرجاء تسجيل الدخول.';
-          } else if (e.code == 'invalid-email') {
-            msg = 'صيغة الإيميل غير صحيحة.';
-          } else if (e.code == 'weak-password') {
-            msg = 'الرمز السري ضعيف جداً (6 خانات على الأقل).';
-          }
-          _showSnack(msg);
-          return;
-        } catch (e) {
-          _setLoading(false);
-          _showSnack('حدث خطأ: $e');
-          return;
-        }
+      final email = _getValidEmail(isLogin: false);
+      final password = _signUpPasswordController.text;
+      _setLoading(true);
+      try {
+        // ── فحص الإيميل بالإنشاء ثم الحذف الفوري (بدون حسابات مهجورة) ──
+        final tempCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        await tempCred.user?.delete(); // حذف الحساب المؤقت فوراً
+      } on FirebaseAuthException catch (e) {
         _setLoading(false);
+        String msg = e.message ?? 'حدث خطأ في التسجيل';
+        if (e.code == 'email-already-in-use') {
+          msg = 'هذا البريد الإلكتروني مسجل مسبقاً، الرجاء تسجيل الدخول.';
+        } else if (e.code == 'invalid-email') {
+          msg = 'صيغة الإيميل غير صحيحة.';
+        } else if (e.code == 'weak-password') {
+          msg = 'الرمز السري ضعيف جداً (6 خانات على الأقل).';
+        }
+        _showSnack(msg);
+        return;
+      } catch (e) {
+        _setLoading(false);
+        _showSnack('حدث خطأ: $e');
+        return;
       }
+      _setLoading(false);
     }
     if (_currentStep == 1) {
       if (_selectedGender.isEmpty) {
@@ -275,11 +287,11 @@ class _AuthScreenState extends State<AuthScreen>
     _setLoading(true);
     try {
       await context.read<SavingsProvider>().signUp(
-        email: _getValidEmail(),
-        password: _passwordController.text,
-        fullName: _nameController.text.trim(),
+        email: _getValidEmail(isLogin: false),
+        password: _signUpPasswordController.text,
+        fullName: _signUpNameController.text.trim(),
         gender: isFemale ? 'Female' : 'Male',
-        contact: _contactController.text.trim(),
+        contact: _signUpContactController.text.trim(),
         financialGoal: parsedAmount ?? 5050.0,
         maritalStatus: _selectedStatus.isNotEmpty ? _selectedStatus : (isFemale ? 'عزباء' : 'أعزب'),
         goal: _selectedGoal,
@@ -314,7 +326,7 @@ class _AuthScreenState extends State<AuthScreen>
     // Google Sign-In سيتم تفعيله لاحقاً
     AppSnackbar.show(
       context: context,
-      message: 'تسجيل الدخول بـ Google سيتوفر قريباً ✨',
+      message: 'تسجيل الدخول بـ Google سيتوفر قريباً',
       isSuccess: false,
       isInfo: true,
     );
@@ -323,9 +335,11 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   void dispose() {
     _pageController.dispose();
-    _nameController.dispose();
-    _contactController.dispose();
-    _passwordController.dispose();
+    _loginContactController.dispose();
+    _loginPasswordController.dispose();
+    _signUpNameController.dispose();
+    _signUpContactController.dispose();
+    _signUpPasswordController.dispose();
     _targetAmountController.dispose();
     super.dispose();
   }
@@ -351,11 +365,15 @@ class _AuthScreenState extends State<AuthScreen>
                 children: [
                   // Page 1: has logo + greeting inside
                   _Step1InfoPage(
-                    formKey: _formKey,
+                    formKey: _step1FormKey,
                     isLoginMode: _isLoginMode,
-                    nameController: _nameController,
-                    contactController: _contactController,
-                    passwordController: _passwordController,
+                    nameController: _signUpNameController,
+                    contactController: _isLoginMode
+                        ? _loginContactController
+                        : _signUpContactController,
+                    passwordController: _isLoginMode
+                        ? _loginPasswordController
+                        : _signUpPasswordController,
                     obscurePassword: _obscurePassword,
                     validateContact: _validateContact,
                     onTogglePassword: () =>
@@ -364,11 +382,6 @@ class _AuthScreenState extends State<AuthScreen>
                     onToggleMode: () {
                       setState(() {
                         _isLoginMode = !_isLoginMode;
-                        _formKey.currentState?.reset();
-                        // مسح الحقول لمنع تسرب البيانات بين الوضعين
-                        _nameController.clear();
-                        _contactController.clear();
-                        _passwordController.clear();
                       });
                     },
                     onLogin: _login,
@@ -452,6 +465,104 @@ class _StepDots extends StatelessWidget {
   }
 }
 
+// ─── Animated Mode Tab Switcher ────────────────────────────────────────────────
+class _AuthModeTabSwitcher extends StatelessWidget {
+  final bool isLoginMode;
+  final ValueChanged<bool> onTabChanged;
+
+  const _AuthModeTabSwitcher({
+    required this.isLoginMode,
+    required this.onTabChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.borderLight.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabWidth = (constraints.maxWidth - 8) / 2;
+          return Stack(
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeInOutCubic,
+                alignment: isLoginMode ? Alignment.centerLeft : Alignment.centerRight,
+                child: Container(
+                  width: tabWidth,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.charcoal,
+                    borderRadius: BorderRadius.circular(21),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.charcoal.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  // تسجيل الدخول على اليسار (active slide goes left)
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (!isLoginMode) onTabChanged(true);
+                      },
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontFamily: GoogleFonts.tajawal().fontFamily,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: isLoginMode ? AppColors.white : AppColors.charcoal,
+                          ),
+                          child: const Text('تسجيل الدخول', textDirection: TextDirection.rtl),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // حساب جديد على اليمين
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (isLoginMode) onTabChanged(false);
+                      },
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontFamily: GoogleFonts.tajawal().fontFamily,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: !isLoginMode ? AppColors.white : AppColors.charcoal,
+                          ),
+                          child: const Text('حساب جديد', textDirection: TextDirection.rtl),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ─── Step 1 – Name / Contact / Password (has logo inside) ────────────────────
 class _Step1InfoPage extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -488,213 +599,499 @@ class _Step1InfoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Form(
-        key: formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
+    double dragDelta = 0;
 
-            // ── Logo + greeting (step 1 only) ──
-            Center(
-              child: Image.asset(
-                'assets/images/Logo.png',
-                height: 80,
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              isLoginMode ? 'أهلاً بك مجدداً! 👋' : 'أهلاً بك! 👋',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.charcoal,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              isLoginMode ? 'سجل دخولك لمتابعة تحدي الادخار' : 'ابدأ رحلة الادخار الآن بإنشاء حسابك',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 28),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => dragDelta = 0,
+      onHorizontalDragUpdate: (details) => dragDelta += details.delta.dx,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // سحب لليسار (dragDelta < -30 أو velocity < -100): الانتقال لـ "حساب جديد"
+        if ((dragDelta < -30 || velocity < -100) && isLoginMode) {
+          onToggleMode();
+        }
+        // سحب لليمين (dragDelta > 30 أو velocity > 100): الانتقال لـ "تسجيل الدخول"
+        else if ((dragDelta > 30 || velocity > 100) && !isLoginMode) {
+          onToggleMode();
+        }
+      },
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+        child: Form(
+          key: formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
 
-            // ── Full Name
-            if (!isLoginMode) ...[
-              _StyledField(
-                controller: nameController,
-                label: 'الاسم الكامل',
-                hint: 'أدخل اسمك',
-                icon: Icons.person_outline_rounded,
-                textCapitalization: TextCapitalization.words,
-                validator: (v) {
-                  if (!isLoginMode) {
-                    if (v == null || v.trim().isEmpty) return 'الرجاء إدخال اسمك';
-                    if (v.trim().length < 2) return 'الاسم يجب أن يكون حرفين على الأقل';
-                    if (v.trim().length > 50) return 'الاسم طويل جداً (50 حرف كحد أقصى)';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            // ── Email or Phone
-            _StyledField(
-              controller: contactController,
-              label: 'الإيميل أو رقم الهاتف',
-              hint: 'example@mail.com  أو  +962791234567',
-              icon: Icons.alternate_email_rounded,
-              keyboardType: TextInputType.emailAddress,
-              validator: validateContact,
-            ),
-            const SizedBox(height: 14),
-
-            // ── Password
-            _StyledField(
-              controller: passwordController,
-              label: 'الرمز السري',
-              hint: '• • • • • • • •',
-              icon: Icons.lock_outline_rounded,
-              obscureText: obscurePassword,
-              suffixIcon: IconButton(
-                icon: Icon(
-                  obscurePassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: AppColors.textSecondary,
-                  size: 20,
-                ),
-                onPressed: onTogglePassword,
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'الرجاء إدخال الرمز السري';
-                if (v.length < 6) return 'الرمز يجب أن يكون 6 أحرف على الأقل';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-
-            // ── Forgot password (login mode only)
-            if (isLoginMode)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: onForgotPassword,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text(
-                    'نسيت الرمز السري؟',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              // ── Logo ──
+              Center(
+                child: Image.asset(
+                  'assets/images/Logo.png',
+                  height: 76,
+                  fit: BoxFit.contain,
                 ),
               ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-            // ── Sign In / Next button
-            SizedBox(
-              height: 54,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : (isLoginMode ? onLogin : onNextStep),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        isLoginMode ? 'تسجيل الدخول' : 'التالي',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Toggle Login/Register
-            TextButton(
-              onPressed: onToggleMode,
-              child: Text(
-                isLoginMode ? 'ليس لديك حساب؟ إنشاء حساب جديد' : 'لديك حساب بالفعل؟ تسجيل الدخول',
-                style: const TextStyle(color: AppColors.charcoal, fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // ── Divider
-            Row(
-              children: [
-                const Expanded(
-                  child: Divider(color: AppColors.border, height: 1),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Text(
-                    'أو',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                const Expanded(
-                  child: Divider(color: AppColors.border, height: 1),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // ── Google Sign-In (قريباً)
-            Opacity(
-              opacity: 0.55,
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  SizedBox(
-                    height: 54,
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: onGoogleSignIn,
-                      icon: const Text(
-                        'G',
-                        style: TextStyle(
-                          color: AppColors.googleBlue,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                      label: const Text('تسجيل الدخول بـ Google'),
-                    ),
-                  ),
-                  Positioned(
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
+              // ── Animated Header Text ──
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: Column(
+                  key: ValueKey<bool>(isLoginMode),
+                  children: [
+                    Text(
+                      isLoginMode ? 'أهلاً بك مجدداً! 👋' : 'انضم إلينا اليوم! ✨',
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
                         color: AppColors.charcoal,
-                        borderRadius: BorderRadius.circular(8),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 23,
                       ),
-                      child: const Text('قريباً',
-                          style: TextStyle(color: AppColors.white, fontSize: 10, fontWeight: FontWeight.w700)),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 5),
+                    Text(
+                      isLoginMode
+                          ? 'سجّل دخولك لمتابعة تقدّمك في تحدي الـ 100 يوم'
+                          : 'أنشئ حسابك وابدأ رحلة الادخار والالتزام',
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Tab Switcher ──
+              _AuthModeTabSwitcher(
+                isLoginMode: isLoginMode,
+                onTabChanged: (_) => onToggleMode(),
+              ),
+              const SizedBox(height: 22),
+
+              // ── الحقول + الزر + خط "أو عبر" — انزلاق سلس ومثالي ──
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                child: ClipRect(
+                  child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) {
+                    return Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        ...previousChildren,
+                        ?currentChild,
+                      ],
+                    );
+                  },
+                  transitionBuilder: (child, animation) {
+                    final isLoginForm = child.key == const ValueKey('login_form_key');
+                    // Login على اليسار → يدخل من اليسار (-1.0)
+                    // SignUp على اليمين → يدخل من اليمين (+1.0)
+                    final Offset beginOffset = isLoginForm
+                        ? const Offset(-1.0, 0.0)
+                        : const Offset(1.0, 0.0);
+
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: beginOffset,
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: isLoginMode
+                      ? Column(
+                          key: const ValueKey('login_form_key'),
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // ── Email / Contact Field
+                            _StyledField(
+                              controller: contactController,
+                              label: 'البريد الإلكتروني أو رقم الهاتف',
+                              hint: 'example@mail.com أو +962791234567',
+                              icon: Icons.alternate_email_rounded,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: validateContact,
+                            ),
+                            const SizedBox(height: 14),
+
+                            // ── Password Field
+                            _StyledField(
+                              controller: passwordController,
+                              label: 'كلمة المرور',
+                              hint: '• • • • • • • •',
+                              icon: Icons.lock_outline_rounded,
+                              obscureText: obscurePassword,
+                              suffixIcon: IconButton(
+                                icon: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: Icon(
+                                    obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    key: ValueKey<bool>(obscurePassword),
+                                    color: AppColors.textSecondary,
+                                    size: 22,
+                                  ),
+                                ),
+                                onPressed: onTogglePassword,
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return 'الرجاء إدخال الرمز السري';
+                                if (v.length < 6) return 'الرمز يجب أن يكون 6 أحرف على الأقل';
+                                return null;
+                              },
+                            ),
+
+                            // ── نسيت الرمز السري (تسجيل الدخول فقط)
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: onForgotPassword,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text(
+                                  'نسيت الرمز السري؟',
+                                  textDirection: TextDirection.rtl,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            // ── الزر الأسود (تسجيل الدخول)
+                            _AnimatedSubmitButton(
+                              isLoading: isLoading,
+                              label: 'تسجيل الدخول',
+                              onPressed: isLoading ? null : onLogin,
+                            ),
+                            const SizedBox(height: 18),
+
+                            // ── خط "أو عبر"
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.border.withValues(alpha: 0.1),
+                                          AppColors.border,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  child: Text(
+                                    'أو عبر',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.border,
+                                          AppColors.border.withValues(alpha: 0.1),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Column(
+                          key: const ValueKey('signup_form_key'),
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // ── Full Name (Sign Up)
+                            _StyledField(
+                              controller: nameController,
+                              label: 'الاسم الكامل',
+                              hint: 'أدخل اسمك الكريم',
+                              icon: Icons.person_outline_rounded,
+                              textCapitalization: TextCapitalization.words,
+                              validator: (v) {
+                                if (!isLoginMode) {
+                                  if (v == null || v.trim().isEmpty) return 'الرجاء إدخال اسمك';
+                                  if (v.trim().length < 2) return 'الاسم يجب أن يكون حرفين على الأقل';
+                                  if (v.trim().length > 50) return 'الاسم طويل جداً (50 حرف كحد أقصى)';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+
+                            // ── Email / Contact Field
+                            _StyledField(
+                              controller: contactController,
+                              label: 'البريد الإلكتروني أو رقم الهاتف',
+                              hint: 'example@mail.com أو +962791234567',
+                              icon: Icons.alternate_email_rounded,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: validateContact,
+                            ),
+                            const SizedBox(height: 14),
+
+                            // ── Password Field
+                            _StyledField(
+                              controller: passwordController,
+                              label: 'كلمة المرور',
+                              hint: '• • • • • • • •',
+                              icon: Icons.lock_outline_rounded,
+                              obscureText: obscurePassword,
+                              suffixIcon: IconButton(
+                                icon: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: Icon(
+                                    obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    key: ValueKey<bool>(obscurePassword),
+                                    color: AppColors.textSecondary,
+                                    size: 22,
+                                  ),
+                                ),
+                                onPressed: onTogglePassword,
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return 'الرجاء إدخال الرمز السري';
+                                if (v.length < 6) return 'الرمز يجب أن يكون 6 أحرف على الأقل';
+                                return null;
+                              },
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            // ── الزر الأسود (التالي ←)
+                            _AnimatedSubmitButton(
+                              isLoading: isLoading,
+                              label: 'التالي ←',
+                              onPressed: isLoading ? null : onNextStep,
+                            ),
+                            const SizedBox(height: 18),
+
+                            // ── خط "أو عبر"
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.border.withValues(alpha: 0.1),
+                                          AppColors.border,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  child: Text(
+                                    'أو عبر',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.border,
+                                          AppColors.border.withValues(alpha: 0.1),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
+
+            // ── Google Sign-In ──
+            Opacity(
+              opacity: 0.75,
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border, width: 1.2),
+                ),
+                child: InkWell(
+                  onTap: onGoogleSignIn,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text(
+                            'G',
+                            style: TextStyle(
+                              color: AppColors.googleBlue,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 19,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'تسجيل الدخول بواسطة Google',
+                            style: TextStyle(
+                              color: AppColors.charcoal,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Positioned(
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.charcoal,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'قريباً',
+                            style: TextStyle(
+                              color: AppColors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
+        ),
+      ),
+    ),
+  );
+}
+}
+
+// ─── Animated Submit Button ──────────────────────────────────────────────────
+class _AnimatedSubmitButton extends StatefulWidget {
+  final bool isLoading;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _AnimatedSubmitButton({
+    required this.isLoading,
+    required this.label,
+    this.onPressed,
+  });
+
+  @override
+  State<_AnimatedSubmitButton> createState() => _AnimatedSubmitButtonState();
+}
+
+class _AnimatedSubmitButtonState extends State<_AnimatedSubmitButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.onPressed == null ? null : (_) => setState(() => _isPressed = true),
+      onTapUp: widget.onPressed == null ? null : (_) => setState(() => _isPressed = false),
+      onTapCancel: widget.onPressed == null ? null : () => setState(() => _isPressed = false),
+      onTap: widget.onPressed,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 120),
+        scale: _isPressed ? 0.97 : 1.0,
+        child: Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: widget.onPressed == null
+                ? AppColors.charcoal.withValues(alpha: 0.6)
+                : AppColors.charcoal,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: widget.onPressed == null
+                ? []
+                : [
+                    BoxShadow(
+                      color: AppColors.charcoal.withValues(alpha: 0.22),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: Center(
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.white,
+                    ),
+                  )
+                : Text(
+                    widget.label,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
         ),
       ),
     );
@@ -702,7 +1099,7 @@ class _Step1InfoPage extends StatelessWidget {
 }
 
 // ─── Shared styled text field ─────────────────────────────────────────────────
-class _StyledField extends StatelessWidget {
+class _StyledField extends StatefulWidget {
   final TextEditingController controller;
   final String label;
   final String hint;
@@ -726,20 +1123,117 @@ class _StyledField extends StatelessWidget {
   });
 
   @override
+  State<_StyledField> createState() => _StyledFieldState();
+}
+
+class _StyledFieldState extends State<_StyledField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (mounted) {
+        setState(() => _isFocused = _focusNode.hasFocus);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      textCapitalization: textCapitalization,
-      obscureText: obscureText,
-      textDirection: TextDirection.rtl,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
-        suffixIcon: suffixIcon,
+    final activeColor = AppColors.charcoal;
+    final inactiveColor = AppColors.textSecondary;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(top: 10), // مساحة علوية تتسع للعنوان المرتفع بدون أي اقتصاص
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: AppColors.charcoal.withValues(alpha: 0.08),
+                  blurRadius: 14,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : [],
       ),
-      validator: validator,
+      child: TextFormField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        keyboardType: widget.keyboardType,
+        textCapitalization: widget.textCapitalization,
+        obscureText: widget.obscureText,
+        textDirection: TextDirection.rtl,
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          color: AppColors.charcoal,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          labelStyle: TextStyle(
+            color: inactiveColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          floatingLabelStyle: TextStyle(
+            color: activeColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            height: 1.0,
+          ),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
+          hintText: widget.hint,
+          hintTextDirection: TextDirection.rtl,
+          fillColor: AppColors.surface,
+          filled: true,
+          contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          // suffixIcon بدل prefixIcon لأن النص RTL والأيقونة ستكون على اليمين
+          suffixIcon: AnimatedScale(
+            duration: const Duration(milliseconds: 200),
+            scale: _isFocused ? 1.12 : 1.0,
+            child: Icon(
+              widget.icon,
+              size: 21,
+              color: _isFocused ? activeColor : inactiveColor,
+            ),
+          ),
+          // إذا كان فيه suffixIcon أصلي (مثل زر إظهار كلمة المرور) نضعه كـ prefixIcon
+          prefixIcon: widget.suffixIcon,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.border, width: 1),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.border, width: 1.2),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: activeColor, width: 2.0),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.error, width: 1.2),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.error, width: 2.0),
+          ),
+        ),
+        validator: widget.validator,
+      ),
     );
   }
 }
@@ -921,7 +1415,7 @@ class _Step2StatusPage extends StatelessWidget {
                       backgroundColor: Colors.transparent,
                       isScrollControlled: true,
                       builder: (BuildContext ctx) {
-                        return _CustomDatePickerModal(
+                        return CustomDatePickerModal(
                           initialDate: initialDate,
                           onConfirm: (date) {
                             onSelectDate(date);
@@ -1528,232 +2022,6 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-// ─── Custom Date Picker ──────────────────────────────────────────────────────
-class _CustomDatePickerModal extends StatefulWidget {
-  final DateTime initialDate;
-  final ValueChanged<DateTime> onConfirm;
-
-  const _CustomDatePickerModal({
-    required this.initialDate,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_CustomDatePickerModal> createState() => _CustomDatePickerModalState();
-}
-
-class _CustomDatePickerModalState extends State<_CustomDatePickerModal> {
-  late int selectedYear;
-  late int selectedMonth;
-  late int selectedDay;
-
-  final int minYear = 1920;
-  final int maxYear = DateTime.now().year;
-
-  final List<String> monthNames = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-  ];
-
-  late FixedExtentScrollController yearController;
-  late FixedExtentScrollController monthController;
-  late FixedExtentScrollController dayController;
-
-  @override
-  void initState() {
-    super.initState();
-    selectedYear = widget.initialDate.year;
-    selectedMonth = widget.initialDate.month;
-    selectedDay = widget.initialDate.day;
-
-    yearController = FixedExtentScrollController(initialItem: selectedYear - minYear);
-    monthController = FixedExtentScrollController(initialItem: selectedMonth - 1);
-    dayController = FixedExtentScrollController(initialItem: selectedDay - 1);
-  }
-
-  @override
-  void dispose() {
-    yearController.dispose();
-    monthController.dispose();
-    dayController.dispose();
-    super.dispose();
-  }
-
-  int getDaysInMonth(int year, int month) {
-    if (month == 2) {
-      return (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) ? 29 : 28;
-    }
-    const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    return days[month - 1];
-  }
-
-  void updateDayController() {
-    int daysInCurrentMonth = getDaysInMonth(selectedYear, selectedMonth);
-    if (selectedDay > daysInCurrentMonth) {
-      setState(() {
-        selectedDay = daysInCurrentMonth;
-      });
-      dayController.jumpToItem(selectedDay - 1);
-    } else {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 320,
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'اختر تاريخ ميلادك',
-            style: GoogleFonts.tajawal(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.charcoal,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: Center(
-              child: SizedBox(
-                height: 120, // Exactly fits 3 items of 40px each (limits view to 1 above, 1 selected, 1 below)
-                child: Directionality(
-                  textDirection: TextDirection.ltr, // strictly LTR: Year(Left), Month(Center), Day(Right)
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Continuous selection overlay with borders
-                      Container(
-                        height: 40,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: AppColors.borderLight.withValues(alpha: 0.3),
-                          border: const Border(
-                            top: BorderSide(color: AppColors.border, width: 1.5),
-                            bottom: BorderSide(color: AppColors.border, width: 1.5),
-                          ),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          // Year (Left)
-                          Expanded(
-                            flex: 1,
-                            child: CupertinoPicker.builder(
-                              scrollController: yearController,
-                              itemExtent: 40,
-                              diameterRatio: 1.5,
-                              squeeze: 1.1,
-                              selectionOverlay: const SizedBox(), // custom overlay is drawn underneath
-                              onSelectedItemChanged: (index) {
-                                selectedYear = minYear + index;
-                                updateDayController();
-                              },
-                              childCount: maxYear - minYear + 1,
-                              itemBuilder: (context, index) {
-                                final isSelected = (minYear + index) == selectedYear;
-                                return Center(
-                                  child: Text(
-                                    '${minYear + index}',
-                                    style: GoogleFonts.tajawal(
-                                      fontSize: isSelected ? 20 : 16,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          // Month (Center)
-                          Expanded(
-                            flex: 2,
-                            child: CupertinoPicker.builder(
-                              scrollController: monthController,
-                              itemExtent: 40,
-                              diameterRatio: 1.5,
-                              squeeze: 1.1,
-                              selectionOverlay: const SizedBox(),
-                              onSelectedItemChanged: (index) {
-                                selectedMonth = index + 1;
-                                updateDayController();
-                              },
-                              childCount: 12,
-                              itemBuilder: (context, index) {
-                                final isSelected = (index + 1) == selectedMonth;
-                                return Center(
-                                  child: Text(
-                                    '${monthNames[index]} (${index + 1})',
-                                    style: GoogleFonts.tajawal(
-                                      fontSize: isSelected ? 18 : 15,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          // Day (Right)
-                          Expanded(
-                            flex: 1,
-                            child: CupertinoPicker.builder(
-                              scrollController: dayController,
-                              itemExtent: 40,
-                              diameterRatio: 1.5,
-                              squeeze: 1.1,
-                              selectionOverlay: const SizedBox(),
-                              onSelectedItemChanged: (index) {
-                                setState(() {
-                                  selectedDay = index + 1;
-                                });
-                              },
-                              childCount: getDaysInMonth(selectedYear, selectedMonth),
-                              itemBuilder: (context, index) {
-                                final isSelected = (index + 1) == selectedDay;
-                                return Center(
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: GoogleFonts.tajawal(
-                                      fontSize: isSelected ? 20 : 16,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                      color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              onPressed: () {
-                widget.onConfirm(DateTime(selectedYear, selectedMonth, selectedDay));
-              },
-              child: const Text('تأكيد الاختيار', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Forgot Password Bottom Sheet ───────────────────────────────────────────────────────────────
 class _ForgotPasswordSheet extends StatefulWidget {

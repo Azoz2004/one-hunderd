@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
+import 'package:one_hunderd/core/widgets/custom_date_picker_modal.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -57,30 +58,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _selectDate() async {
+  void _selectDate() {
     final now = DateTime.now();
-    final date = await showDatePicker(
+    final initialDate = _selectedBirthDate ?? DateTime(now.year - 20, 6, 15);
+    showModalBottomSheet(
       context: context,
-      initialDate: _selectedBirthDate ?? DateTime(now.year - 20),
-      firstDate: DateTime(1920),
-      lastDate: now,
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.charcoal,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.charcoal,
-            ),
-          ),
-          child: child!,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext ctx) {
+        return CustomDatePickerModal(
+          initialDate: initialDate,
+          onConfirm: (date) {
+            setState(() => _selectedBirthDate = date);
+            Navigator.pop(ctx);
+          },
         );
       },
     );
-    if (date != null) {
-      setState(() => _selectedBirthDate = date);
-    }
   }
 
   int _calcAge(DateTime? date) {
@@ -117,8 +111,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         AppSnackbar.show(
           context: context,
-          message: 'تم حفظ بيانات الملف الشخصي بنجاح ✏️',
+          message: 'تم حفظ بيانات الملف الشخصي بنجاح',
           isSuccess: true,
+          isEdit: true,
         );
         Navigator.pop(context);
       }

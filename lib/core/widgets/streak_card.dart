@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:one_hunderd/features/challenges/providers/savings_provider.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/features/challenges/widgets/gamification_dialogs.dart';
 import 'package:one_hunderd/features/home/screens/streak_details_screen.dart';
 
@@ -34,8 +35,8 @@ class StreakCard extends StatelessWidget {
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const StreakDetailsScreen(),
+                AppScalePageRoute(
+                  page: const StreakDetailsScreen(),
                 ),
               ),
               child: _StreakHalfCard(

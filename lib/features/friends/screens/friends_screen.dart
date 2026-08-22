@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:one_hunderd/features/friends/services/friends_service.dart';
 import 'package:one_hunderd/core/theme/app_theme.dart';
+import 'package:one_hunderd/core/theme/app_transitions.dart';
 import 'package:one_hunderd/core/widgets/app_snackbar.dart';
 import 'package:one_hunderd/features/friends/screens/add_friend_screen.dart';
 import 'package:one_hunderd/features/profile/screens/profile_screen.dart'; // FacelessAvatar
@@ -65,7 +66,7 @@ class _FriendsScreenState extends State<FriendsScreen>
   void _goToAddFriend() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddFriendScreen()),
+      AppScalePageRoute(page: const AddFriendScreen()),
     );
     _load();
   }
@@ -266,8 +267,8 @@ class _FriendsScreenState extends State<FriendsScreen>
                       onTap: () async {
                         final updated = await Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileDetailScreen(
+                          AppScalePageRoute(
+                            page: UserProfileDetailScreen(
                               userId: friend.uid,
                               initialName: friend.fullName,
                               initialAvatarIndex: friend.avatarIndex,
@@ -311,7 +312,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                           if (mounted) {
                             AppSnackbar.show(
                               context: context,
-                              message: 'تم قبول طلب الصداقة بنجاح 🎉',
+                              message: 'تم قبول طلب الصداقة بنجاح',
                               isSuccess: true,
                             );
                           }
@@ -334,7 +335,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                           if (mounted) {
                             AppSnackbar.show(
                               context: context,
-                              message: 'تم رفض طلب الصداقة 🚫',
+                              message: 'تم رفض طلب الصداقة',
                               isSuccess: false,
                               isDelete: true,
                             );

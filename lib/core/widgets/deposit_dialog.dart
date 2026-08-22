@@ -86,7 +86,7 @@ class _DepositDialogState extends State<DepositDialog> {
     if (!mounted) return;
     AppSnackbar.show(
       context: context,
-      message: 'تم تسجيل الإيداع بنجاح 💰',
+      message: 'تم تسجيل الإيداع بنجاح',
       isSuccess: true,
     );
 
@@ -103,6 +103,9 @@ class _DepositDialogState extends State<DepositDialog> {
       await checkAndShowMilestone(ctx, updatedDays);
       if (!ctx.mounted) return;
       await checkAndShowWeeklyQuest(ctx, updatedDays);
+      if (!ctx.mounted) return;
+      // ── الانتظار حتى يتفاعل المستخدم مع أنيميشن الرقم المحقق على الرئيسية ──
+      await Future.delayed(const Duration(milliseconds: 2200));
       if (!ctx.mounted) return;
       await checkAndShowDailyInsight(ctx);
     });

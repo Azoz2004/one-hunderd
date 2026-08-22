@@ -69,8 +69,8 @@ class NotificationService {
 
     await _flutterLocalNotificationsPlugin.zonedSchedule(
       id: 2,
-      title: 'وينك؟ 🧐',
-      body: 'يبدو أن تحقيق هدفك لم يعد من أولوياتك حالياً 😔. سنتوقف عن إرسال التذكيرات لك لبعض الوقت.',
+      title: 'وينك؟',
+      body: 'يبدو أن تحقيق هدفك لم يعد من أولوياتك حالياً. سنتوقف عن إرسال التذكيرات لك لبعض الوقت.',
       scheduledDate: scheduleTime,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -92,7 +92,7 @@ class NotificationService {
       scheduleTime = scheduleTime.add(const Duration(days: 1));
     }
 
-    String title = 'صباح الإنجاز! ☀️';
+    String title = 'صباح الإنجاز!';
     String body = '';
 
     // 2. Contextual & Time-Based Hooks
@@ -102,7 +102,7 @@ class NotificationService {
       body = 'الراتب نزل؟ كافئ نفسك المستقبلية واقتطع مبلغ لحصالة الـ 100 يوم اليوم.';
     } else {
       final morningQuotes = [
-        'صباح الخير! وفرت ثمن قهوة اليوم؟ حطها بالحصالة وخلي بداية يومك إنجاز ☕',
+        'صباح الخير! وفرت ثمن قهوة اليوم؟ حطها بالحصالة وخلي بداية يومك إنجاز.',
         'قيمة إيداعك اليوم ممكن تنصرف على وجبة سريعة بتنساها بعد ساعة، أو تبني فيها حلمك. الخيار إلك!',
       ];
       body = morningQuotes[Random().nextInt(morningQuotes.length)];
@@ -133,12 +133,12 @@ class NotificationService {
       scheduleTime = scheduleTime.add(const Duration(days: 1));
     }
 
-    String title = 'تنبيه! ⚠️';
-    String body = 'الستريك تبعك في خطر! 🔥 لا تضيع تعب الأيام الماضية، سجل إيداعك الآن.';
+    String title = 'تنبيه!';
+    String body = 'الستريك تبعك في خطر! لا تضيع تعب الأيام الماضية، سجل إيداعك الآن.';
 
     // 3. Milestone Teaser
     if ([23, 48, 73, 98].contains(completedDays)) {
-      title = 'قربت توصل! 🚀';
+      title = 'قربت توصل!';
       body = 'باقي يومين بس وتوصل لمحطة جديدة وتكسب مكافأتك! لا توقف هسا.';
     }
 
