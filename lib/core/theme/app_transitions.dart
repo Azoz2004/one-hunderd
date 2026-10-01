@@ -24,13 +24,15 @@ class AppScalePageRoute<T> extends PageRouteBuilder<T> {
               end: Offset.zero,
             ).animate(CurvedAnimation(
               parent: animation,
-              curve: Curves.easeOutQuart,
+              curve: Curves.easeOutCubic,
               reverseCurve: Curves.easeInCubic,
             ));
 
             return SlideTransition(
               position: slide,
-              child: child,
+              child: RepaintBoundary(
+                child: child,
+              ),
             );
           },
         );

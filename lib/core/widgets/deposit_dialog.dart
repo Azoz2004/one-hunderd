@@ -20,11 +20,19 @@ class DepositDialog extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: AnimationStyle(
+        duration: const Duration(milliseconds: 380),
+        reverseDuration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
       builder: (sheetContext) => Padding(
         // هذا الـ Padding يأخذ قيمة viewInsets من sheetContext
         // وهو يتحدث تلقائياً مع كل إطار للأنيميشن — بدون أي تأخير
         padding: MediaQuery.viewInsetsOf(sheetContext),
-        child: const DepositDialog(),
+        child: const RepaintBoundary(
+          child: DepositDialog(),
+        ),
       ),
     );
   }

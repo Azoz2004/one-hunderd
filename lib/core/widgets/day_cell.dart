@@ -28,7 +28,6 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController;
   late final Animation<double> _scaleAnimation;
   bool _animateComplete = false;
-  bool _hasStartedInitialAnimation = false;
 
   @override
   void initState() {
@@ -53,19 +52,8 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
       ],
     ).animate(_scaleController);
 
-    final provider = context.read<SavingsProvider>();
-    if (provider.isDayCompleted(widget.dayNumber)) {
-      _hasStartedInitialAnimation = true;
-      final delayMs = 300 + (widget.dayNumber * 22);
-      Future.delayed(Duration(milliseconds: delayMs), () {
-        if (mounted) {
-          setState(() {
-            _animateComplete = true;
-          });
-          _scaleController.forward(from: 0.0);
-        }
-      });
-    }
+    // تبدأ جميع الخلايا مطفأة 100% بدون بدء أي مؤقت حتى تكتمل الصفحة ويتم إعطاء إشارة البدء
+    _animateComplete = false;
   }
 
   @override
@@ -75,9 +63,8 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
       final provider = context.read<SavingsProvider>();
       final completed = provider.isDayCompleted(widget.dayNumber);
 
-      if (widget.animationTrigger % 2 != 0) {
-        // ── الرقم الفردي: المستخدم فتح صفحة أخرى ──
-        // نطفئ الخلية فوراً في الخلفية لتكون مطفأة وجاهزة
+      if (widget.animationTrigger.isEven) {
+        // ── الرقم الزوجي: إطفاء الخلايا ──
         if (_animateComplete) {
           setState(() {
             _animateComplete = false;
@@ -85,8 +72,7 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
         }
         _scaleController.reset();
       } else {
-        // ── الرقم الزوجي: المستخدم رجع للشاشة الرئيسية ──
-        // نبدأ تتابع الإضاءة والنبض المتتابع من الخلية 1 وحتى الأخيرة
+        // ── الرقم الفردي: انطلاق التتابع المتسلسل ──
         if (_animateComplete) {
           setState(() {
             _animateComplete = false;
@@ -95,11 +81,11 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
         _scaleController.reset();
 
         if (completed) {
-          final delayMs = 30 + (widget.dayNumber * 18);
+          final delayMs = 30 + (widget.dayNumber * 20);
           Future.delayed(Duration(milliseconds: delayMs), () {
             if (mounted) {
               setState(() {
-                _animateComplete = true;
+                _animateComplete = true; // تضيء الخلية فقط عند وصول دورها في الانيميشن!
               });
               _scaleController.forward(from: 0.0);
             }
@@ -120,22 +106,15 @@ class _DayCellState extends State<DayCell> with SingleTickerProviderStateMixin {
     final provider = context.watch<SavingsProvider>();
     final completed = provider.isDayCompleted(widget.dayNumber);
 
-    if (completed && !_animateComplete && !_hasStartedInitialAnimation) {
-      // عند فتح التطبيق وتحميل البيانات لأول مرة من Firebase
-      _hasStartedInitialAnimation = true;
-      final delayMs = 350 + (widget.dayNumber * 22);
-      Future.delayed(Duration(milliseconds: delayMs), () {
+    if (!completed && _animateComplete) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
-            _animateComplete = true;
+            _animateComplete = false;
           });
-          _scaleController.forward(from: 0.0);
+          _scaleController.reverse();
         }
       });
-    } else if (!completed && _animateComplete) {
-      _animateComplete = false;
-      _hasStartedInitialAnimation = false;
-      _scaleController.reverse();
     }
 
     final visualCompleted = _animateComplete;

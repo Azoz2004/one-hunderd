@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,13 +46,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _gridAnimationTrigger = 0;
 
   Future<T?> _pushScreen<T>(Widget screen) async {
-    // 1. لا نقوم بأي إعادة بناء فورية لحظة الدفع لنحافظ على سلاسة انيميشن الصعود (380ms)
-    // بعد اكتمال صعود الصفحة وتغطيتها للشاشة (450ms)، نطفئ الخلايا في الخلفية بهدوء
+    // 1. بعد اكتمال صعود الصفحة وتغطيتها للشاشة (450ms)، نطفئ الخلايا في الخلفية بهدوء
     Future.delayed(const Duration(milliseconds: 450), () {
       if (mounted) {
         setState(() {
-          if (_gridAnimationTrigger % 2 == 0) {
-            _gridAnimationTrigger++;
+          if (_gridAnimationTrigger.isOdd) {
+            _gridAnimationTrigger++; // رقم زوجي: إطفاء في الخلفية
           }
         });
       }
@@ -63,16 +63,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppScalePageRoute<T>(page: screen),
     );
 
-    // 3. عند العودة: ننتظر انتهاء انيميشن نزول وخروج الصفحة بالكامل (460ms)
+    // 3. عند العودة: ننتظر انتهاء انيميشن نزول وخروج الصفحة بالكامل (480ms)
     // وحينها تكون خلايا الشاشة الرئيسية مطفأة مسبقاً، فتبدأ موجة الامتلاء والإضاءة
     if (mounted) {
       Future.delayed(const Duration(milliseconds: 480), () {
         if (mounted) {
           setState(() {
-            if (_gridAnimationTrigger % 2 != 0) {
-              _gridAnimationTrigger++;
-            } else {
-              _gridAnimationTrigger += 2;
+            if (_gridAnimationTrigger.isEven) {
+              _gridAnimationTrigger++; // رقم فردي: تشغيل التتابع
             }
           });
         }
@@ -93,6 +91,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       NotificationService().scheduleDailyNotifications(provider.completedDays);
       // Attach separation state listener
       provider.addListener(_onProviderChange);
+
+      // Pre-cache all avatar and UI images so first-time navigation has 0 decoding latency
+      const assetsToWarmUp = [
+        'assets/images/Logo.png',
+        'assets/images/AVATAR.webp',
+        'assets/images/AVATAR-1.webp',
+        'assets/images/AVATAR-2.webp',
+        'assets/images/AVATAR-3.webp',
+        'assets/images/AVATAR-4.webp',
+        'assets/images/AVATAR-5.webp',
+        'assets/images/AVATAR-6.png',
+        'assets/images/AVATAR-7.webp',
+        'assets/images/FLOWER-1.png',
+        'assets/images/FLOWER-2.png',
+      ];
+      for (final asset in assetsToWarmUp) {
+        precacheImage(AssetImage(asset), context);
+      }
+
+      // ── بدء حركة شبكة الأرقام بعد أن تفتح الصفحة كاملة ويتحمل كل شيء ──
+      // ننتظر 600ms بعد ظهور الشاشة الأولى واستقرارها تماماً أمام عين المستخدم
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted && _gridAnimationTrigger == 0) {
+          setState(() {
+            _gridAnimationTrigger = 1; // رقم فردي: إشارة انطلاق ملء وإضاءة الأرقام بالتتابع من 1
+          });
+        }
+      });
     });
   }
 
@@ -821,59 +847,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         provider: provider,
         pushScreen: _pushScreen,
       ),
-      body: Stack(
-        children: [
-          const _BackgroundDecor(),
-          SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                // ── Sticky App Bar ──
-                SliverAppBar(
-                  pinned: true,
-                  floating: false,
-                  backgroundColor: const Color(0xFFF6EFE6),
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  automaticallyImplyLeading: false,
-                  titleSpacing: 0,
-                  title: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _TopBar(
-                      provider: provider,
-                      hasPendingQuest: _hasPendingQuest,
-                      onQuestBadgeTap: () async {
-                        await checkAndShowPendingQuest(context, provider.completedDays);
-                        _refreshPendingQuestBadge();
-                      },
+      body: RepaintBoundary(
+        child: Stack(
+          children: [
+            const _BackgroundDecor(),
+            SafeArea(
+              child: CustomScrollView(
+                slivers: [
+                  // ── Sticky App Bar ──
+                  SliverAppBar(
+                    pinned: true,
+                    floating: false,
+                    backgroundColor: const Color(0xFFF6EFE6),
+                    elevation: 0,
+                    scrolledUnderElevation: 0,
+                    automaticallyImplyLeading: false,
+                    titleSpacing: 0,
+                    title: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _TopBar(
+                        provider: provider,
+                        hasPendingQuest: _hasPendingQuest,
+                        onQuestBadgeTap: () async {
+                          await checkAndShowPendingQuest(context, provider.completedDays);
+                          _refreshPendingQuestBadge();
+                        },
+                      ),
                     ),
                   ),
-                ),
 
-                // ── Main content ──
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _HouseCard(
-                        user: user,
-                        provider: provider,
-                        pushScreen: _pushScreen,
-                        animationTrigger: _gridAnimationTrigger,
-                      ),
-                      const SizedBox(height: 16),
-                      const StreakCard(),
-                      const SizedBox(height: 12),
-                      _SummaryRow(
-                        provider: provider,
-                        pushScreen: _pushScreen,
-                      ),
-                    ]),
+                  // ── Main content ──
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _HouseCard(
+                          user: user,
+                          provider: provider,
+                          pushScreen: _pushScreen,
+                          animationTrigger: _gridAnimationTrigger,
+                        ),
+                        const SizedBox(height: 16),
+                        const StreakCard(),
+                        const SizedBox(height: 12),
+                        _SummaryRow(
+                          provider: provider,
+                          pushScreen: _pushScreen,
+                        ),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
 
       // ── FAB ──
@@ -1129,7 +1157,9 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الملف الشخصي',
                       onTap: () {
                         Navigator.pop(context);
-                        widget.pushScreen(const ProfileScreen());
+                        Future.delayed(const Duration(milliseconds: 120), () {
+                          widget.pushScreen(const ProfileScreen());
+                        });
                       },
                     ),
 
@@ -1138,7 +1168,9 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'لوحة الصدارة',
                       onTap: () {
                         Navigator.pop(context);
-                        widget.pushScreen(const LeaderboardScreen());
+                        Future.delayed(const Duration(milliseconds: 120), () {
+                          widget.pushScreen(const LeaderboardScreen());
+                        });
                       },
                     ),
                     _DrawerItem(
@@ -1146,7 +1178,9 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الأصدقاء',
                       onTap: () {
                         Navigator.pop(context);
-                        widget.pushScreen(const FriendsScreen());
+                        Future.delayed(const Duration(milliseconds: 120), () {
+                          widget.pushScreen(const FriendsScreen());
+                        });
                       },
                     ),
                     // ── نظام التحدي (مع النقطة الحمراء) ──
@@ -1156,7 +1190,9 @@ class _AppDrawerState extends State<_AppDrawer> {
                       badgeCount: _pendingChallengeCount,
                       onTap: () {
                         Navigator.pop(context);
-                        widget.pushScreen(const ChallengeHubScreen());
+                        Future.delayed(const Duration(milliseconds: 120), () {
+                          widget.pushScreen(const ChallengeHubScreen());
+                        });
                       },
                     ),
                     _DrawerItem(
@@ -1190,7 +1226,9 @@ class _AppDrawerState extends State<_AppDrawer> {
                       label: 'الإعدادات',
                       onTap: () {
                         Navigator.pop(context);
-                        widget.pushScreen(const SettingsScreen());
+                        Future.delayed(const Duration(milliseconds: 120), () {
+                          widget.pushScreen(const SettingsScreen());
+                        });
                       },
                     ),
                   ],
@@ -2435,7 +2473,10 @@ class _GlowingDepositButtonState extends State<_GlowingDepositButton>
         );
       },
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapDown: (_) {
+          HapticFeedback.lightImpact();
+          setState(() => _isPressed = true);
+        },
         onTapUp: (_) {
           setState(() => _isPressed = false);
           widget.onPressed();

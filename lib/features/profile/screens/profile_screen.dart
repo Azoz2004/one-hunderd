@@ -184,6 +184,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    final provider = context.read<SavingsProvider>();
+    if (provider.userProfile != null) {
+      _loading = false;
+    }
     _loadData();
   }
 
@@ -589,7 +593,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    final provider = context.watch<SavingsProvider>();
+    final userProf = provider.userProfile;
+
+    if (_loading && userProf == null) {
       return const Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator(color: AppColors.charcoal)),
@@ -597,25 +604,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final profile = _data?['user_profile_v1'] as Map<String, dynamic>? ?? {};
-    final fullName = profile['fullName'] as String? ?? 'مستخدم';
-    final contact = profile['contact'] as String? ?? '';
-    final bio = profile['bio'] as String? ?? '';
-    final birthDateStr = profile['birthDate'] as String?;
+    final fullName = _data != null ? (profile['fullName'] as String? ?? 'مستخدم') : (userProf?.fullName ?? 'مستخدم');
+    final contact = _data != null ? (profile['contact'] as String? ?? '') : (userProf?.contact ?? '');
+    final bio = _data != null ? (profile['bio'] as String? ?? '') : (userProf?.bio ?? '');
+    final birthDateStr = _data != null ? (profile['birthDate'] as String?) : userProf?.birthDate?.toIso8601String();
     final age = _calcAge(birthDateStr);
-    final goal = (profile['financialGoal'] as num?)?.toDouble() ?? 5050.0;
-    final maritalStatus = profile['maritalStatus'] as String? ?? 'شاب';
-    final goalType = profile['goal'] as String? ?? 'بيت';
-    final challengeType = profile['challengeType'] as String? ?? 'فردي';
+    final goal = _data != null ? ((profile['financialGoal'] as num?)?.toDouble() ?? 5050.0) : (userProf?.financialGoal ?? 5050.0);
+    final maritalStatus = _data != null ? (profile['maritalStatus'] as String? ?? 'شاب') : (userProf?.maritalStatus ?? 'شاب');
+    final goalType = _data != null ? (profile['goal'] as String? ?? 'بيت') : (userProf?.goal ?? 'بيت');
+    final challengeType = _data != null ? (profile['challengeType'] as String? ?? 'فردي') : (userProf?.challengeType ?? 'فردي');
     
-    final totalSaved = _totalSaved();
-    final depositsCount = _totalDepositsCount();
-    final streak = (_data?['current_streak_v1'] as num?)?.toInt() ?? 0;
-    final coins = (_data?['wooden_coins_v1'] as num?)?.toInt() ?? 0;
-    final lifebuoys = (_data?['lifebuoys_v1'] as num?)?.toInt() ?? 0;
-    final avatarIndex = (_data?['avatarIndex'] as num?)?.toInt() ?? 0;
+    final totalSaved = _data != null ? _totalSaved() : provider.totalSaved;
+    final depositsCount = _data != null ? _totalDepositsCount() : provider.deposits.length;
+    final streak = _data != null ? ((_data?['current_streak_v1'] as num?)?.toInt() ?? 0) : provider.currentStreak;
+    final coins = _data != null ? ((_data?['wooden_coins_v1'] as num?)?.toInt() ?? 0) : provider.woodenCoins;
+    final lifebuoys = _data != null ? ((_data?['lifebuoys_v1'] as num?)?.toInt() ?? 0) : provider.lifebuoys;
+    final avatarIndex = _data != null ? ((_data?['avatarIndex'] as num?)?.toInt() ?? 0) : provider.avatarIndex;
     final progress = goal > 0 ? (totalSaved / goal).clamp(0.0, 1.0) : 0.0;
     
-    final provider = context.watch<SavingsProvider>();
     final isCoop = provider.isCooperativeMode;
     final partnerAvatar = provider.partnerAvatarIndex;
 
